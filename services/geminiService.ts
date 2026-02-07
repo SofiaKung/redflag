@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, RiskLevel } from "../types";
+import { runLinkIntelligence, RealLinkIntelligence } from "./linkIntelligence";
 
 export const analyzeFraudContent = async (
   input: { text?: string; imagesBase64?: string[]; userLanguage: string }
@@ -103,6 +104,28 @@ const analyzeUrlForensic = async (
 ): Promise<AnalysisResult> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+  // =============================================
+  // LAYER 1-3: Run REAL technical checks in parallel with AI analysis
+  // =============================================
+  const intelPromise = runLinkIntelligence(url);
+
+  // Build the REAL data section for Gemini (populated after intel resolves)
+  const intel = await intelPromise;
+
+  const realDataSection = `
+    REAL TECHNICAL INTELLIGENCE (from actual API lookups — use this data, do NOT fabricate):
+    ${intel.resolvedIp ? `- Resolved IP: ${intel.resolvedIp}` : '- DNS Resolution: FAILED (domain may not exist)'}
+    ${intel.serverCountry ? `- Server Location: ${intel.serverCountry}${intel.serverCity ? `, ${intel.serverCity}` : ''} (VERIFIED via GeoIP)` : '- Server Location: Could not be determined'}
+    ${intel.isp ? `- ISP/Hosting: ${intel.isp}` : ''}
+    ${intel.domainAge ? `- Domain Age: ${intel.domainAge} (registered: ${intel.registrationDate}) (VERIFIED via RDAP/WHOIS)` : '- Domain Age: RDAP lookup failed — domain may be too new or registry does not support RDAP'}
+    ${intel.registrar ? `- Registrar: ${intel.registrar}` : ''}
+    ${intel.homographAttack ? '- HOMOGRAPH ATTACK DETECTED: Domain uses deceptive characters (Punycode/Cyrillic)' : '- Homograph Check: Clean'}
+    ${intel.safeBrowsingThreats.length > 0 ? `- Google Safe Browsing: FLAGGED — ${intel.safeBrowsingThreats.join(', ')}` : '- Google Safe Browsing: No known threats (or API not available)'}
+    ${intel.redirectCount > 0 ? `- Redirect detected: Final URL is ${intel.finalUrl}` : '- No redirects detected'}
+    - Checks completed: ${intel.checksCompleted.join(', ') || 'none'}
+    - Checks failed: ${intel.checksFailed.join(', ') || 'none'}
+  `;
+
   const prompt = `
     You are "RedFlag," a high-precision forensic cybersecurity AI.
 
@@ -112,6 +135,8 @@ const analyzeUrlForensic = async (
 
     TASK: Perform a deep forensic analysis on this specific URL: "${url}"
 
+    ${realDataSection}
+
     URL FORENSIC REQUIREMENTS:
     1. Check for Typosquatting (e.g., g0ogle.com instead of google.com).
     2. Identify Suspicious TLDs (.xyz, .top, .pw, .loan, .click, .info etc.).
@@ -119,19 +144,19 @@ const analyzeUrlForensic = async (
     4. Check for URL shorteners (bit.ly, t.co) used to hide real destination.
     5. Analyze URL structure for redirect patterns or suspicious query parameters.
 
-    LINK METADATA (populate with your best forensic assessment):
+    LINK METADATA RULES:
     - analyzedUrl: The exact URL being analyzed
-    - impersonating: What legitimate brand/entity this URL impersonates (e.g. "SingPass", "DBS Bank", "PayPal"). Use "None detected" if no impersonation.
-    - actualDomain: The actual registered domain (e.g. "singpass-verify.xyz")
-    - domainAge: Estimated age based on URL patterns and TLD. Use formats like "< 24 hours", "2 days", "~1 week", "~3 months", "1+ years".
-    - serverLocation: Most likely hosting location (e.g. "Russia", "Panama", "Singapore", "United States")
-    - sslCertificate: Likely SSL type (e.g. "Free / Let's Encrypt", "EV Certificate", "None", "Self-signed", "Standard DV")
-    - blacklistCount: Estimated number of security blacklists this would appear on (0-10)
-    - suspiciousTld: The TLD if suspicious (e.g. ".xyz", ".top") or empty string "" if normal (.com, .gov.sg, etc.)
+    - impersonating: What legitimate brand/entity this URL impersonates. Use "None detected" if no impersonation.
+    - actualDomain: The actual registered domain
+    - domainAge: USE THE REAL RDAP DATA ABOVE if available. If RDAP failed, state "Unknown (lookup failed)"
+    - serverLocation: USE THE REAL GEOIP DATA ABOVE if available. If lookup failed, state "Unknown"
+    - blacklistCount: Use the Safe Browsing result above. If no threats found, use 0. If flagged, count the threat types.
+    - suspiciousTld: The TLD if suspicious (e.g. ".xyz", ".top") or empty string "" if normal
 
     STANDARD ANALYSIS:
     - Classify fraud type (Phishing, Smishing, Brand Impersonation, etc.)
     - Generate headline, explanation, action, hook, trap, and redFlags
+    - IMPORTANT: Incorporate the REAL technical data into your explanation and redFlags
     - Generate in both Native (English technical) and Translated (${userLanguage}) versions
     - If device language matches native language, Translated version must be in English
 
@@ -159,11 +184,10 @@ const analyzeUrlForensic = async (
       actualDomain: { type: Type.STRING },
       domainAge: { type: Type.STRING },
       serverLocation: { type: Type.STRING },
-      sslCertificate: { type: Type.STRING },
       blacklistCount: { type: Type.NUMBER },
       suspiciousTld: { type: Type.STRING },
     },
-    required: ["analyzedUrl", "impersonating", "actualDomain", "domainAge", "serverLocation", "sslCertificate", "blacklistCount", "suspiciousTld"]
+    required: ["analyzedUrl", "impersonating", "actualDomain", "domainAge", "serverLocation", "blacklistCount", "suspiciousTld"]
   };
 
   const responseSchema = {
@@ -198,7 +222,29 @@ const analyzeUrlForensic = async (
 
     const responseText = response.text;
     if (!responseText) throw new Error("Empty response from AI");
-    return JSON.parse(responseText) as AnalysisResult;
+
+    const result = JSON.parse(responseText) as AnalysisResult;
+
+    // Attach the REAL verified intelligence data to the result
+    if (result.linkMetadata) {
+      result.linkMetadata.verified = {
+        domainAge: intel.domainAge,
+        registrationDate: intel.registrationDate,
+        registrar: intel.registrar,
+        serverCountry: intel.serverCountry,
+        serverCity: intel.serverCity,
+        isp: intel.isp,
+        resolvedIp: intel.resolvedIp,
+        homographAttack: intel.homographAttack,
+        safeBrowsingThreats: intel.safeBrowsingThreats,
+        finalUrl: intel.finalUrl,
+        redirectCount: intel.redirectCount,
+        checksCompleted: intel.checksCompleted,
+        checksFailed: intel.checksFailed,
+      };
+    }
+
+    return result;
   } catch (error) {
     console.error("URL Forensic Analysis Error:", error);
     return getFallbackResult(userLanguage);

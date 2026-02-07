@@ -17,6 +17,9 @@ import {
   Eye,
   Fingerprint,
   Search,
+  CheckCircle,
+  CircleAlert,
+  Network,
 } from 'lucide-react';
 import { RiskLevel, AnalysisResult, LocalizedAnalysis } from '../types';
 
@@ -171,17 +174,6 @@ const getMetaSeverity = (field: string, value: string | number): string => {
     if (typeof value === 'number' && value > 0) return 'text-red-600';
     return 'text-emerald-600';
   }
-  if (field === 'sslCertificate') {
-    if (
-      typeof value === 'string' &&
-      (value.toLowerCase().includes('free') ||
-        value.toLowerCase().includes('none') ||
-        value.toLowerCase().includes('self'))
-    )
-      return 'text-amber-600';
-    if (typeof value === 'string' && value.toLowerCase().includes('ev')) return 'text-emerald-600';
-    return 'text-slate-700';
-  }
   return 'text-slate-700';
 };
 
@@ -205,6 +197,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
   const IconComponent = config.Icon;
 
   const meta = result.linkMetadata;
+  const verified = meta?.verified;
   const analyzedUrl = meta?.analyzedUrl || '';
 
   useEffect(() => {
@@ -403,48 +396,146 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
               <Fingerprint size={12} /> Digital Fingerprint
             </h4>
             <div className="grid grid-cols-2 gap-3">
+              {/* Domain Age */}
               <div className="p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm">
-                <div className="flex items-center gap-2 text-neutral-400 mb-2">
-                  <Clock size={12} />
-                  <span className="text-[9px] uppercase font-black tracking-wider">Domain Age</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-neutral-400">
+                    <Clock size={12} />
+                    <span className="text-[9px] uppercase font-black tracking-wider">Domain Age</span>
+                  </div>
+                  {verified?.domainAge ? (
+                    <CheckCircle size={10} className="text-emerald-500" />
+                  ) : (
+                    <CircleAlert size={10} className="text-amber-400" />
+                  )}
                 </div>
-                <p className={`text-sm font-bold ${getMetaSeverity('domainAge', meta.domainAge)}`}>
-                  {meta.domainAge}
+                <p className={`text-sm font-bold ${getMetaSeverity('domainAge', verified?.domainAge || meta.domainAge)}`}>
+                  {verified?.domainAge || meta.domainAge}
+                </p>
+                {verified?.registrationDate && (
+                  <p className="text-[9px] font-mono text-neutral-400 mt-1">
+                    Reg: {new Date(verified.registrationDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+
+              {/* Server Location */}
+              <div className="p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-neutral-400">
+                    <Server size={12} />
+                    <span className="text-[9px] uppercase font-black tracking-wider">Hosted In</span>
+                  </div>
+                  {verified?.serverCountry ? (
+                    <CheckCircle size={10} className="text-emerald-500" />
+                  ) : (
+                    <CircleAlert size={10} className="text-amber-400" />
+                  )}
+                </div>
+                <p className="text-sm font-bold text-slate-800">
+                  {verified?.serverCountry
+                    ? `${verified.serverCountry}${verified.serverCity ? `, ${verified.serverCity}` : ''}`
+                    : meta.serverLocation}
+                </p>
+                {verified?.isp && (
+                  <p className="text-[9px] font-mono text-neutral-400 mt-1 truncate" title={verified.isp}>
+                    {verified.isp}
+                  </p>
+                )}
+              </div>
+
+              {/* DNS Resolution */}
+              <div className="p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-neutral-400">
+                    <Network size={12} />
+                    <span className="text-[9px] uppercase font-black tracking-wider">DNS</span>
+                  </div>
+                  {verified?.resolvedIp ? (
+                    <CheckCircle size={10} className="text-emerald-500" />
+                  ) : verified && verified.checksCompleted.includes('dns') === false ? (
+                    <CheckCircle size={10} className="text-emerald-500" />
+                  ) : (
+                    <CircleAlert size={10} className="text-amber-400" />
+                  )}
+                </div>
+                <p className={`text-sm font-bold ${
+                  verified?.resolvedIp ? 'text-slate-800' : 'text-red-600'
+                }`}>
+                  {verified?.resolvedIp || (verified ? 'Does not resolve' : 'Unchecked')}
                 </p>
               </div>
 
+              {/* Blacklists / Safe Browsing */}
               <div className="p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm">
-                <div className="flex items-center gap-2 text-neutral-400 mb-2">
-                  <Server size={12} />
-                  <span className="text-[9px] uppercase font-black tracking-wider">Hosted In</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-neutral-400">
+                    <Flag size={12} />
+                    <span className="text-[9px] uppercase font-black tracking-wider">Safe Browsing</span>
+                  </div>
+                  {verified && verified.checksCompleted.includes('safe_browsing') ? (
+                    <CheckCircle size={10} className="text-emerald-500" />
+                  ) : (
+                    <CircleAlert size={10} className="text-amber-400" />
+                  )}
                 </div>
-                <p className="text-sm font-bold text-slate-800">{meta.serverLocation}</p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm">
-                <div className="flex items-center gap-2 text-neutral-400 mb-2">
-                  <Lock size={12} />
-                  <span className="text-[9px] uppercase font-black tracking-wider">SSL Cert</span>
-                </div>
-                <p
-                  className={`text-sm font-bold ${getMetaSeverity('sslCertificate', meta.sslCertificate)}`}
-                >
-                  {meta.sslCertificate}
-                </p>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-white border border-neutral-100 shadow-sm">
-                <div className="flex items-center gap-2 text-neutral-400 mb-2">
-                  <Flag size={12} />
-                  <span className="text-[9px] uppercase font-black tracking-wider">Blacklists</span>
-                </div>
-                <p
-                  className={`text-sm font-bold ${getMetaSeverity('blacklistCount', meta.blacklistCount)}`}
-                >
-                  {meta.blacklistCount > 0 ? `Flagged on ${meta.blacklistCount}` : 'None found'}
+                <p className={`text-sm font-bold ${
+                  (verified?.safeBrowsingThreats?.length || 0) > 0
+                    ? 'text-red-600'
+                    : meta.blacklistCount > 0
+                      ? 'text-red-600'
+                      : 'text-emerald-600'
+                }`}>
+                  {verified?.safeBrowsingThreats?.length
+                    ? `${verified.safeBrowsingThreats.length} threat${verified.safeBrowsingThreats.length > 1 ? 's' : ''}`
+                    : meta.blacklistCount > 0
+                      ? `Flagged on ${meta.blacklistCount}`
+                      : 'No threats'}
                 </p>
               </div>
             </div>
+
+            {/* Verification legend */}
+            <div className="flex items-center gap-4 mt-3 px-1">
+              <div className="flex items-center gap-1">
+                <CheckCircle size={8} className="text-emerald-500" />
+                <span className="text-[8px] font-mono text-neutral-400 uppercase">Verified (API)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <CircleAlert size={8} className="text-amber-400" />
+                <span className="text-[8px] font-mono text-neutral-400 uppercase">AI Estimate</span>
+              </div>
+            </div>
+
+            {/* Extra verified data: Registrar, Homograph, Redirects */}
+            {verified && (verified.registrar || verified.homographAttack || (verified.redirectCount > 0)) && (
+              <div className="mt-3 p-3 rounded-xl bg-neutral-50 border border-neutral-100 space-y-1.5">
+                {verified.registrar && (
+                  <div className="flex items-center gap-2">
+                    <Globe size={10} className="text-neutral-400" />
+                    <span className="text-[10px] font-mono text-neutral-500 truncate">
+                      Registrar: {verified.registrar}
+                    </span>
+                  </div>
+                )}
+                {verified.homographAttack && (
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={10} className="text-red-500" />
+                    <span className="text-[10px] font-mono text-red-600 font-bold">
+                      HOMOGRAPH ATTACK DETECTED (Punycode/Cyrillic)
+                    </span>
+                  </div>
+                )}
+                {verified.redirectCount > 0 && verified.finalUrl && (
+                  <div className="flex items-center gap-2">
+                    <ExternalLink size={10} className="text-amber-500" />
+                    <span className="text-[10px] font-mono text-amber-600 truncate">
+                      Redirects to: {verified.finalUrl}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -535,54 +626,36 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-neutral-100 z-50">
         {result.riskLevel === RiskLevel.DANGER ? (
           <>
-            <div className="flex gap-3">
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={onReset}
-                className="flex-1 py-4 bg-neutral-100 text-neutral-600 font-bold rounded-2xl text-sm transition-all hover:bg-neutral-200"
-              >
-                Dismiss
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowReportModal(true)}
-                className={`flex-[2] py-4 ${config.buttonBg} text-white font-bold rounded-2xl shadow-2xl ${config.buttonShadow} text-sm flex items-center justify-center gap-2 transition-all`}
-              >
-                <Ban size={16} />
-                Block & Report
-              </motion.button>
-            </div>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowReportModal(true)}
+              className={`w-full py-4 ${config.buttonBg} text-white font-bold rounded-2xl shadow-2xl ${config.buttonShadow} text-sm flex items-center justify-center gap-2 transition-all`}
+            >
+              <Ban size={16} />
+              Block & Report
+            </motion.button>
             <button
               onClick={onReset}
-              className="w-full mt-3 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
             >
-              <RefreshCw size={12} /> New Forensic Scan
+              <RefreshCw size={12} /> START ANOTHER SCAN
             </button>
           </>
         ) : result.riskLevel === RiskLevel.CAUTION ? (
           <>
-            <div className="flex gap-3">
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={onReset}
-                className="flex-1 py-4 bg-neutral-100 text-neutral-600 font-bold rounded-2xl text-sm transition-all hover:bg-neutral-200"
-              >
-                Dismiss
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setShowReportModal(true)}
-                className={`flex-[2] py-4 ${config.buttonBg} text-white font-bold rounded-2xl shadow-2xl ${config.buttonShadow} text-sm flex items-center justify-center gap-2 transition-all`}
-              >
-                <Flag size={16} />
-                Report Suspicious
-              </motion.button>
-            </div>
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowReportModal(true)}
+              className={`w-full py-4 ${config.buttonBg} text-white font-bold rounded-2xl shadow-2xl ${config.buttonShadow} text-sm flex items-center justify-center gap-2 transition-all`}
+            >
+              <Flag size={16} />
+              Report Suspicious
+            </motion.button>
             <button
               onClick={onReset}
-              className="w-full mt-3 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
             >
-              <RefreshCw size={12} /> New Forensic Scan
+              <RefreshCw size={12} /> START ANOTHER SCAN
             </button>
           </>
         ) : (
@@ -599,9 +672,9 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             </motion.button>
             <button
               onClick={onReset}
-              className="w-full mt-3 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
             >
-              <RefreshCw size={12} /> New Forensic Scan
+              <RefreshCw size={12} /> START ANOTHER SCAN
             </button>
           </>
         )}

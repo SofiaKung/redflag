@@ -26,9 +26,25 @@ export interface LinkMetadata {
   actualDomain: string;
   domainAge: string;
   serverLocation: string;
-  sslCertificate: string;
   blacklistCount: number;
   suspiciousTld: string;
+
+  // Real verified data from actual API lookups
+  verified?: {
+    domainAge: string | null;          // From RDAP
+    registrationDate: string | null;   // ISO date from RDAP
+    registrar: string | null;          // From RDAP
+    serverCountry: string | null;      // From GeoIP (ip-api.com)
+    serverCity: string | null;         // From GeoIP
+    isp: string | null;               // From GeoIP
+    resolvedIp: string | null;         // From DNS (dns.google)
+    homographAttack: boolean;          // Punycode/Cyrillic detection
+    safeBrowsingThreats: string[];     // From Google Safe Browsing
+    finalUrl: string | null;           // After following redirects
+    redirectCount: number;
+    checksCompleted: string[];         // Which checks succeeded
+    checksFailed: string[];            // Which checks failed
+  };
 }
 
 export interface AnalysisResult {

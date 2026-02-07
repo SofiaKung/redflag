@@ -411,6 +411,12 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             >
               I understand the risk, open anyway
             </button>
+            <button
+              onClick={onReset}
+              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+            >
+              <RefreshCw size={12} /> START ANOTHER SCAN
+            </button>
           </>
         ) : result.riskLevel === RiskLevel.CAUTION ? (
           <>
@@ -422,22 +428,12 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
               <ExternalLink size={16} />
               Proceed with Caution
             </motion.button>
-            <div className="flex gap-3 mt-3">
-              <button
-                onClick={handleCopyUrl}
-                className="flex-1 py-3 rounded-xl font-bold text-xs text-neutral-500 bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center gap-1.5 transition-all"
-              >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-                {copied ? 'Copied' : 'Copy URL'}
-              </button>
-              <button
-                onClick={onReset}
-                className="flex-1 py-3 rounded-xl font-bold text-xs text-neutral-500 bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center gap-1.5 transition-all"
-              >
-                <RefreshCw size={12} />
-                New Scan
-              </button>
-            </div>
+            <button
+              onClick={onReset}
+              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+            >
+              <RefreshCw size={12} /> START ANOTHER SCAN
+            </button>
           </>
         ) : (
           <>
@@ -449,22 +445,12 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
               <ExternalLink size={16} />
               Open Link
             </motion.button>
-            <div className="flex gap-3 mt-3">
-              <button
-                onClick={handleCopyUrl}
-                className="flex-1 py-3 rounded-xl font-bold text-xs text-neutral-500 bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center gap-1.5 transition-all"
-              >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-                {copied ? 'Copied' : 'Copy URL'}
-              </button>
-              <button
-                onClick={onReset}
-                className="flex-1 py-3 rounded-xl font-bold text-xs text-neutral-500 bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center gap-1.5 transition-all"
-              >
-                <RefreshCw size={12} />
-                New Scan
-              </button>
-            </div>
+            <button
+              onClick={onReset}
+              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+            >
+              <RefreshCw size={12} /> START ANOTHER SCAN
+            </button>
           </>
         )}
       </div>

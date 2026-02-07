@@ -331,7 +331,7 @@ const App: React.FC = () => {
                   {activeContent.action}
                 </button>
                 <button onClick={reset} className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors">
-                  <RefreshCw size={12} /> START NEW FORENSIC SCAN
+                  <RefreshCw size={12} /> START ANOTHER SCAN
                 </button>
               </div>
             </motion.div>
