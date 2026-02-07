@@ -1,0 +1,292 @@
+
+import { GoogleGenAI, Type } from "@google/genai";
+import { AnalysisResult, RiskLevel } from "../types";
+
+export const analyzeFraudContent = async (
+  input: { text?: string; imagesBase64?: string[]; userLanguage: string }
+): Promise<AnalysisResult> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const prompt = `
+    You are "RedFlag," a high-precision universal fraud detection AI.
+    
+    CONTEXT:
+    - User's device language is: "${input.userLanguage}".
+    
+    TASK:
+    1. Analyze the provided content (text and/or multiple images) collectively. 
+    2. Detect the language of the provided image/text ("Native Language").
+    3. Classify the fraud type into a concise category (e.g., Job Scam, Investment Scam, Phishing, Tech Support Scam, Romance Scam, impersonation, etc.).
+    4. Perform a deep fraud analysis across all provided evidence.
+    5. Generate Output in TWO localized versions:
+       - Version A ("native"): All fields in the detected Native Language.
+       - Version B ("translated"): All fields in the user's device language ("${input.userLanguage}").
+         *Note: If the device language matches the native language, Version B must be in English.*
+
+    REQUIRED FIELDS FOR BOTH VERSIONS:
+    - headline: A short verdict.
+    - explanation: A detailed reason for the risk score.
+    - action: Specific security advice.
+    - hook: What initially attracts the victim.
+    - trap: The actual malicious mechanism or technical threat.
+    - redFlags: An array of specific signals (e.g., bad grammar, suspicious domain, urgency).
+
+    Return JSON ONLY.
+  `;
+
+  const localizedSchema = {
+    type: Type.OBJECT,
+    properties: {
+      headline: { type: Type.STRING },
+      explanation: { type: Type.STRING },
+      action: { type: Type.STRING },
+      hook: { type: Type.STRING },
+      trap: { type: Type.STRING },
+      redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
+    },
+    required: ["headline", "explanation", "action", "hook", "trap", "redFlags"]
+  };
+
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      riskLevel: { type: Type.STRING, description: "SAFE, CAUTION, or DANGER" },
+      score: { type: Type.NUMBER, description: "0-100 risk score" },
+      category: { type: Type.STRING, description: "The type of fraud classified (e.g. Job Scam)" },
+      detectedNativeLanguage: { type: Type.STRING },
+      userSystemLanguage: { type: Type.STRING },
+      native: localizedSchema,
+      translated: localizedSchema
+    },
+    required: ["riskLevel", "score", "category", "detectedNativeLanguage", "userSystemLanguage", "native", "translated"]
+  };
+
+  const parts: any[] = [{ text: prompt }];
+  if (input.text) parts.push({ text: input.text });
+  
+  if (input.imagesBase64 && input.imagesBase64.length > 0) {
+    input.imagesBase64.forEach(base64 => {
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: base64
+        }
+      });
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema as any,
+      },
+    });
+
+    const responseText = response.text;
+    if (!responseText) throw new Error("Empty response text from AI");
+
+    return JSON.parse(responseText) as AnalysisResult;
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    return getFallbackResult(input.userLanguage);
+  }
+};
+
+const analyzeUrlForensic = async (
+  url: string,
+  context: string,
+  userLanguage: string,
+  imageBase64?: string
+): Promise<AnalysisResult> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const prompt = `
+    You are "RedFlag," a high-precision forensic cybersecurity AI.
+
+    CONTEXT:
+    - User's device language is: "${userLanguage}".
+    - Additional context: ${context}
+
+    TASK: Perform a deep forensic analysis on this specific URL: "${url}"
+
+    URL FORENSIC REQUIREMENTS:
+    1. Check for Typosquatting (e.g., g0ogle.com instead of google.com).
+    2. Identify Suspicious TLDs (.xyz, .top, .pw, .loan, .click, .info etc.).
+    3. Look for Brand Impersonation in the subdomain, domain or path.
+    4. Check for URL shorteners (bit.ly, t.co) used to hide real destination.
+    5. Analyze URL structure for redirect patterns or suspicious query parameters.
+
+    LINK METADATA (populate with your best forensic assessment):
+    - analyzedUrl: The exact URL being analyzed
+    - impersonating: What legitimate brand/entity this URL impersonates (e.g. "SingPass", "DBS Bank", "PayPal"). Use "None detected" if no impersonation.
+    - actualDomain: The actual registered domain (e.g. "singpass-verify.xyz")
+    - domainAge: Estimated age based on URL patterns and TLD. Use formats like "< 24 hours", "2 days", "~1 week", "~3 months", "1+ years".
+    - serverLocation: Most likely hosting location (e.g. "Russia", "Panama", "Singapore", "United States")
+    - sslCertificate: Likely SSL type (e.g. "Free / Let's Encrypt", "EV Certificate", "None", "Self-signed", "Standard DV")
+    - blacklistCount: Estimated number of security blacklists this would appear on (0-10)
+    - suspiciousTld: The TLD if suspicious (e.g. ".xyz", ".top") or empty string "" if normal (.com, .gov.sg, etc.)
+
+    STANDARD ANALYSIS:
+    - Classify fraud type (Phishing, Smishing, Brand Impersonation, etc.)
+    - Generate headline, explanation, action, hook, trap, and redFlags
+    - Generate in both Native (English technical) and Translated (${userLanguage}) versions
+    - If device language matches native language, Translated version must be in English
+
+    Return JSON ONLY.
+  `;
+
+  const localizedSchema = {
+    type: Type.OBJECT,
+    properties: {
+      headline: { type: Type.STRING },
+      explanation: { type: Type.STRING },
+      action: { type: Type.STRING },
+      hook: { type: Type.STRING },
+      trap: { type: Type.STRING },
+      redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
+    },
+    required: ["headline", "explanation", "action", "hook", "trap", "redFlags"]
+  };
+
+  const linkMetadataSchema = {
+    type: Type.OBJECT,
+    properties: {
+      analyzedUrl: { type: Type.STRING },
+      impersonating: { type: Type.STRING },
+      actualDomain: { type: Type.STRING },
+      domainAge: { type: Type.STRING },
+      serverLocation: { type: Type.STRING },
+      sslCertificate: { type: Type.STRING },
+      blacklistCount: { type: Type.NUMBER },
+      suspiciousTld: { type: Type.STRING },
+    },
+    required: ["analyzedUrl", "impersonating", "actualDomain", "domainAge", "serverLocation", "sslCertificate", "blacklistCount", "suspiciousTld"]
+  };
+
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      riskLevel: { type: Type.STRING, description: "SAFE, CAUTION, or DANGER" },
+      score: { type: Type.NUMBER, description: "0-100 risk score" },
+      category: { type: Type.STRING, description: "The type of fraud" },
+      detectedNativeLanguage: { type: Type.STRING },
+      userSystemLanguage: { type: Type.STRING },
+      native: localizedSchema,
+      translated: localizedSchema,
+      linkMetadata: linkMetadataSchema,
+    },
+    required: ["riskLevel", "score", "category", "detectedNativeLanguage", "userSystemLanguage", "native", "translated", "linkMetadata"]
+  };
+
+  const parts: any[] = [{ text: prompt }];
+  if (imageBase64) {
+    parts.push({ inlineData: { mimeType: "image/jpeg", data: imageBase64 } });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema as any,
+      },
+    });
+
+    const responseText = response.text;
+    if (!responseText) throw new Error("Empty response from AI");
+    return JSON.parse(responseText) as AnalysisResult;
+  } catch (error) {
+    console.error("URL Forensic Analysis Error:", error);
+    return getFallbackResult(userLanguage);
+  }
+};
+
+export const verifyUrlString = async (
+  url: string,
+  userLanguage: string
+): Promise<AnalysisResult> => {
+  return analyzeUrlForensic(url, "Direct URL submission by user.", userLanguage);
+};
+
+export const checkPhishingFromScreenshot = async (
+  imageBase64: string,
+  userLanguage: string
+): Promise<AnalysisResult> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  // PASS 1: Vision Extraction
+  const visionPrompt = `
+    You are a forensic cybersecurity analyst.
+    TASK: Look at this screenshot. Identify any URL, domain name, or IP address visible.
+    
+    RULES:
+    1. Extract the URL exactly as it appears. 
+    2. Identify if the page is mimicking a specific brand (e.g. Bank, Social Media).
+    
+    RETURN JSON ONLY:
+    {
+      "found_url": "String (or null)",
+      "visual_impersonation": "String (e.g. 'Mimicking DBS Bank Login')"
+    }
+  `;
+
+  try {
+    const visionResponse = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: {
+        parts: [
+          { text: visionPrompt },
+          { inlineData: { mimeType: "image/jpeg", data: imageBase64 } }
+        ]
+      },
+      config: { responseMimeType: "application/json" }
+    });
+
+    const visionData = JSON.parse(visionResponse.text || "{}");
+    const foundUrl = visionData.found_url;
+    const impersonation = visionData.visual_impersonation || "Generic page";
+
+    if (!foundUrl) {
+      return analyzeFraudContent({ imagesBase64: [imageBase64], userLanguage });
+    }
+
+    return analyzeUrlForensic(
+      foundUrl,
+      `Visual context: page mimicking "${impersonation}". URL extracted from user-submitted screenshot.`,
+      userLanguage,
+      imageBase64
+    );
+
+  } catch (error) {
+    console.error("Phishing Analysis Error:", error);
+    return analyzeFraudContent({ imagesBase64: [imageBase64], userLanguage });
+  }
+};
+
+const getFallbackResult = (userLanguage: string): AnalysisResult => ({
+  riskLevel: RiskLevel.DANGER,
+  score: 98,
+  category: "Undetermined Fraud",
+  detectedNativeLanguage: "English",
+  userSystemLanguage: userLanguage,
+  native: {
+    headline: "CRITICAL THREAT",
+    explanation: "Suspicious pattern detected in content structure.",
+    action: "Do not interact. Report immediately.",
+    hook: "Psychological trigger detected.",
+    trap: "Deceptive mechanism found.",
+    redFlags: ["Unverified sender", "Urgency trigger"]
+  },
+  translated: {
+    headline: "ANCAMAN KRITIKAL",
+    explanation: "Corak mencurigakan dikesan dalam struktur kandungan.",
+    action: "Jangan berinteraksi. Lapor segera.",
+    hook: "Picu psikologi dikesan.",
+    trap: "Mekanisme memperdaya ditemui.",
+    redFlags: ["Pengirim tidak sah", "Picu kesegeraan"]
+  }
+});

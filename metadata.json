@@ -1,0 +1,8 @@
+
+{
+  "name": "RedFlag - AI Fraud Detection",
+  "description": "A high-fidelity universal fraud detection prototype using Clinical Futurism design principles and Gemini AI analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
