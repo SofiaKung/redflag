@@ -3,7 +3,8 @@
  * linkIntelligence.ts
  *
  * Real technical checks for URL analysis — no AI guessing.
- * All APIs used are browser-compatible (CORS-friendly) and free-tier.
+ * Public checks run directly from browser-safe APIs.
+ * Secret checks (Safe Browsing / WHOIS fallback) are delegated to a same-origin backend route.
  *
  * Layers:
  *  1. DNS Resolution → Google DNS-over-HTTPS
@@ -378,48 +379,6 @@ async function followRedirects(url: string): Promise<{ finalUrl: string; count: 
   }
 }
 
-// ============================================
-// CHECK 6: Google Safe Browsing API
-// ============================================
-async function checkSafeBrowsing(url: string, apiKey: string): Promise<string[]> {
-  try {
-    const body = {
-      client: { clientId: "redflag", clientVersion: "1.0" },
-      threatInfo: {
-        threatTypes: [
-          "MALWARE",
-          "SOCIAL_ENGINEERING",
-          "UNWANTED_SOFTWARE",
-          "POTENTIALLY_HARMFUL_APPLICATION",
-        ],
-        platformTypes: ["ANY_PLATFORM"],
-        threatEntryTypes: ["URL"],
-        threatEntries: [{ url }],
-      },
-    };
-
-    const res = await fetch(
-      `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }
-    );
-
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const matches = data.matches || [];
-    return matches.map((m: any) => m.threatType as string);
-  } catch {
-    return [];
-  }
-}
-
-// ============================================
-// CHECK 7: WHOIS via Whoxy (CORS-friendly)
-// ============================================
 interface WhoisResult {
   registrantName: string | null;
   registrantOrg: string | null;
@@ -435,47 +394,27 @@ interface WhoisResult {
   privacyProtected: boolean;
 }
 
-async function whoisLookup(domain: string, apiKey: string): Promise<WhoisResult | null> {
-  if (!apiKey) return null;
+interface SecretIntelResult {
+  safeBrowsingThreats: string[];
+  whois: WhoisResult | null;
+}
+
+async function fetchSecretIntel(url: string, domain: string): Promise<SecretIntelResult | null> {
   try {
-    const res = await fetch(
-      `https://api.whoxy.com/?key=${apiKey}&whois=${encodeURIComponent(domain)}`
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.status !== 1) return null;
+    const response = await fetch('/api/link-intel-secrets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, domain }),
+    });
 
-    const registrant = data.registrant_contact || {};
-    const registrar = data.domain_registrar || {};
-
-    // Filter out redacted/privacy placeholder values
-    const clean = (val: string | undefined): string | null => {
-      if (!val) return null;
-      const lower = val.toLowerCase();
-      if (lower.includes('redacted') || lower.includes('not available') || lower === '') return null;
-      return val;
-    };
-
-    // Detect privacy protection from registrant org/name patterns
-    const orgLower = (registrant.company_name || '').toLowerCase();
-    const nameLower = (registrant.full_name || '').toLowerCase();
-    const privacyKeywords = ['privacy', 'proxy', 'whoisguard', 'domains by proxy', 'withheld', 'private', 'redacted', 'data protected'];
-    const privacyProtected = privacyKeywords.some(kw => orgLower.includes(kw) || nameLower.includes(kw))
-      || data.domain_registered === 'no';
+    if (!response.ok) return null;
+    const data = await response.json();
 
     return {
-      registrantName: clean(registrant.full_name),
-      registrantOrg: clean(registrant.company_name),
-      registrantStreet: clean(registrant.mailing_address),
-      registrantCity: clean(registrant.city_name),
-      registrantState: clean(registrant.state_name),
-      registrantPostalCode: clean(registrant.zip_code),
-      registrantCountry: registrant.country_name || registrant.country_code || null,
-      registrantEmail: clean(registrant.email_address),
-      registrantTelephone: clean(registrant.phone_number),
-      registrarName: registrar.registrar_name || null,
-      whoisCreatedDate: data.create_date || null,
-      privacyProtected,
+      safeBrowsingThreats: Array.isArray(data?.safeBrowsingThreats)
+        ? data.safeBrowsingThreats.filter((threat: unknown) => typeof threat === 'string')
+        : [],
+      whois: data?.whois || null,
     };
   } catch {
     return null;
@@ -584,17 +523,14 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
     };
   }
 
-  const whoisApiKey = (typeof process !== 'undefined' && process.env?.WHOIS_API_KEY) || '';
-
   // Run checks in parallel for speed
-  const [dnsResult, rdapResult, homographResult, redirectResult, safeBrowsingResult, whoisResult] =
+  const [dnsResult, rdapResult, homographResult, redirectResult, secretIntelResult] =
     await Promise.allSettled([
       resolveDNS(hostname),
       rdapLookup(hostname),
       Promise.resolve(checkHomograph(hostname)),
       followRedirects(url.startsWith('http') ? url : `https://${url}`),
-      checkSafeBrowsing(url, (typeof process !== 'undefined' && process.env?.API_KEY) || ''),
-      whoisLookup(hostname, whoisApiKey),
+      fetchSecretIntel(url.startsWith('http') ? url : `https://${url}`, hostname),
     ]);
 
   // Process DNS + GeoIP
@@ -650,8 +586,10 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
 
   // Process Safe Browsing
   let safeBrowsingThreats: string[] = [];
-  if (safeBrowsingResult.status === 'fulfilled') {
-    safeBrowsingThreats = safeBrowsingResult.value;
+  let whois: WhoisResult | null = null;
+  if (secretIntelResult.status === 'fulfilled' && secretIntelResult.value) {
+    safeBrowsingThreats = secretIntelResult.value.safeBrowsingThreats;
+    whois = secretIntelResult.value.whois;
     checksCompleted.push('safe_browsing');
   } else {
     checksFailed.push('safe_browsing');
@@ -686,8 +624,7 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   }
 
   // Whoxy fallback: use if RDAP didn't return registrant data
-  if (whoisResult.status === 'fulfilled' && whoisResult.value) {
-    const whois = whoisResult.value;
+  if (whois) {
     if (!registrantOrg && !registrantName) {
       // RDAP had no registrant data, use Whoxy
       registrantName = whois.registrantName;

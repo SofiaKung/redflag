@@ -18,11 +18,26 @@ export interface LinkPreviewResult {
   error: string | null;
 }
 
+const normalizePreviewUrl = (rawUrl: string): string | null => {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  // QR payloads often omit protocol (e.g. "example.com/path")
+  return `https://${trimmed}`;
+};
+
 /**
  * Captures a mobile-viewport screenshot of the target URL via Browserless.io.
  * Returns a base64-encoded PNG string, or null with an error message on failure.
  */
 export const generateLinkPreview = async (targetUrl: string): Promise<LinkPreviewResult> => {
+  const normalizedUrl = normalizePreviewUrl(targetUrl);
+  if (!normalizedUrl) {
+    return { imageBase64: null, error: 'Invalid URL format' };
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
@@ -32,7 +47,7 @@ export const generateLinkPreview = async (targetUrl: string): Promise<LinkPrevie
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        url: targetUrl,
+        url: normalizedUrl,
         options: {
           type: 'png',
           fullPage: false,
@@ -53,7 +68,8 @@ export const generateLinkPreview = async (targetUrl: string): Promise<LinkPrevie
     });
 
     if (!response.ok) {
-      return { imageBase64: null, error: 'Preview unavailable' };
+      const errorText = await response.text();
+      return { imageBase64: null, error: errorText || 'Preview unavailable' };
     }
 
     const buffer = await response.arrayBuffer();

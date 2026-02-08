@@ -103,9 +103,9 @@
 
 | Aspect | Detail |
 |--------|--------|
-| **Infrastructure** | Client-side only (no backend server) |
+| **Infrastructure** | Frontend SPA + same-origin serverless API routes |
 | **AI Engine** | Google Gemini via `@google/genai` SDK |
-| **API Key** | Injected via Vite `define` plugin from `GEMINI_API_KEY` env var |
+| **API Key** | Read server-side in `/api/*` routes from environment variables |
 
 **Service Functions (`services/geminiService.ts`):**
 
@@ -188,8 +188,8 @@ interface LocalizedAnalysis {
 
 | Concern | Mitigation |
 |---------|------------|
-| **SSRF** | Not applicable — no server. URLs are analyzed by AI string inspection only. |
-| **API Key Exposure** | Key injected at build time via Vite `define`. Not bundled in client code in production builds when configured correctly. |
+| **SSRF** | Restricted by server-side route validation (`/api/screenshot` only accepts explicit `http/https` URL payloads). |
+| **API Key Exposure** | Secrets are no longer injected into client bundle; keys are used only on server-side API routes. |
 | **Privacy** | Images are converted to base64 and sent to Google Gemini API. Not stored permanently. |
 | **Hallucination Control** | Prompts explicitly instruct Gemini: "If safe, say safe." Structured JSON schema constrains output. |
 | **QR Safety** | QR codes are decoded to strings only — never opened in a browser. |

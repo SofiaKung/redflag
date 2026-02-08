@@ -1,13 +1,42 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult, RiskLevel } from "../types";
-import { runLinkIntelligence, RealLinkIntelligence } from "./linkIntelligence";
+import { runLinkIntelligence } from "./linkIntelligence";
+
+const GEMINI_ENDPOINT = '/api/gemini';
+const SchemaType = {
+  OBJECT: 'OBJECT',
+  STRING: 'STRING',
+  ARRAY: 'ARRAY',
+  NUMBER: 'NUMBER',
+} as const;
+
+const generateGeminiText = async (payload: {
+  model: string;
+  contents: unknown;
+  config?: Record<string, unknown>;
+}): Promise<string> => {
+  const response = await fetch(GEMINI_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || 'Gemini request failed');
+  }
+
+  const data = await response.json();
+  if (!data || typeof data.text !== 'string') {
+    throw new Error('Invalid Gemini response');
+  }
+
+  return data.text;
+};
 
 export const analyzeFraudContent = async (
   input: { text?: string; imagesBase64?: string[]; userLanguage: string }
 ): Promise<AnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   const prompt = `
     You are "RedFlag," a high-precision universal fraud detection AI.
     
@@ -36,26 +65,26 @@ export const analyzeFraudContent = async (
   `;
 
   const localizedSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
-      headline: { type: Type.STRING },
-      explanation: { type: Type.STRING },
-      action: { type: Type.STRING },
-      hook: { type: Type.STRING },
-      trap: { type: Type.STRING },
-      redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
+      headline: { type: SchemaType.STRING },
+      explanation: { type: SchemaType.STRING },
+      action: { type: SchemaType.STRING },
+      hook: { type: SchemaType.STRING },
+      trap: { type: SchemaType.STRING },
+      redFlags: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
     },
     required: ["headline", "explanation", "action", "hook", "trap", "redFlags"]
   };
 
   const responseSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
-      riskLevel: { type: Type.STRING, description: "SAFE, CAUTION, or DANGER" },
-      score: { type: Type.NUMBER, description: "0-100 risk score" },
-      category: { type: Type.STRING, description: "The type of fraud classified (e.g. Job Scam)" },
-      detectedNativeLanguage: { type: Type.STRING },
-      userSystemLanguage: { type: Type.STRING },
+      riskLevel: { type: SchemaType.STRING, description: "SAFE, CAUTION, or DANGER" },
+      score: { type: SchemaType.NUMBER, description: "0-100 risk score" },
+      category: { type: SchemaType.STRING, description: "The type of fraud classified (e.g. Job Scam)" },
+      detectedNativeLanguage: { type: SchemaType.STRING },
+      userSystemLanguage: { type: SchemaType.STRING },
       native: localizedSchema,
       translated: localizedSchema
     },
@@ -77,7 +106,7 @@ export const analyzeFraudContent = async (
   }
 
   try {
-    const response = await ai.models.generateContent({
+    const responseText = await generateGeminiText({
       model: "gemini-3-pro-preview",
       contents: { parts },
       config: {
@@ -85,8 +114,6 @@ export const analyzeFraudContent = async (
         responseSchema: responseSchema as any,
       },
     });
-
-    const responseText = response.text;
     if (!responseText) throw new Error("Empty response text from AI");
 
     return JSON.parse(responseText) as AnalysisResult;
@@ -102,8 +129,6 @@ const analyzeUrlForensic = async (
   userLanguage: string,
   imageBase64?: string
 ): Promise<AnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
   // =============================================
   // LAYER 1-3: Run REAL technical checks in parallel with AI analysis
   // =============================================
@@ -179,40 +204,40 @@ const analyzeUrlForensic = async (
   `;
 
   const localizedSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
-      headline: { type: Type.STRING },
-      explanation: { type: Type.STRING },
-      action: { type: Type.STRING },
-      hook: { type: Type.STRING },
-      trap: { type: Type.STRING },
-      redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
+      headline: { type: SchemaType.STRING },
+      explanation: { type: SchemaType.STRING },
+      action: { type: SchemaType.STRING },
+      hook: { type: SchemaType.STRING },
+      trap: { type: SchemaType.STRING },
+      redFlags: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
     },
     required: ["headline", "explanation", "action", "hook", "trap", "redFlags"]
   };
 
   const linkMetadataSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
-      analyzedUrl: { type: Type.STRING },
-      impersonating: { type: Type.STRING },
-      actualDomain: { type: Type.STRING },
-      domainAge: { type: Type.STRING },
-      serverLocation: { type: Type.STRING },
-      blacklistCount: { type: Type.NUMBER },
-      suspiciousTld: { type: Type.STRING },
+      analyzedUrl: { type: SchemaType.STRING },
+      impersonating: { type: SchemaType.STRING },
+      actualDomain: { type: SchemaType.STRING },
+      domainAge: { type: SchemaType.STRING },
+      serverLocation: { type: SchemaType.STRING },
+      blacklistCount: { type: SchemaType.NUMBER },
+      suspiciousTld: { type: SchemaType.STRING },
     },
     required: ["analyzedUrl", "impersonating", "actualDomain", "domainAge", "serverLocation", "blacklistCount", "suspiciousTld"]
   };
 
   const responseSchema = {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
-      riskLevel: { type: Type.STRING, description: "SAFE, CAUTION, or DANGER" },
-      score: { type: Type.NUMBER, description: "0-100 risk score" },
-      category: { type: Type.STRING, description: "The type of fraud" },
-      detectedNativeLanguage: { type: Type.STRING },
-      userSystemLanguage: { type: Type.STRING },
+      riskLevel: { type: SchemaType.STRING, description: "SAFE, CAUTION, or DANGER" },
+      score: { type: SchemaType.NUMBER, description: "0-100 risk score" },
+      category: { type: SchemaType.STRING, description: "The type of fraud" },
+      detectedNativeLanguage: { type: SchemaType.STRING },
+      userSystemLanguage: { type: SchemaType.STRING },
       native: localizedSchema,
       translated: localizedSchema,
       linkMetadata: linkMetadataSchema,
@@ -226,7 +251,7 @@ const analyzeUrlForensic = async (
   }
 
   try {
-    const response = await ai.models.generateContent({
+    const responseText = await generateGeminiText({
       model: "gemini-3-pro-preview",
       contents: { parts },
       config: {
@@ -234,8 +259,6 @@ const analyzeUrlForensic = async (
         responseSchema: responseSchema as any,
       },
     });
-
-    const responseText = response.text;
     if (!responseText) throw new Error("Empty response from AI");
 
     const result = JSON.parse(responseText) as AnalysisResult;
@@ -290,8 +313,6 @@ export const checkPhishingFromScreenshot = async (
   imageBase64: string,
   userLanguage: string
 ): Promise<AnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
   // PASS 1: Vision Extraction
   const visionPrompt = `
     You are a forensic cybersecurity analyst.
@@ -309,7 +330,7 @@ export const checkPhishingFromScreenshot = async (
   `;
 
   try {
-    const visionResponse = await ai.models.generateContent({
+    const visionText = await generateGeminiText({
       model: "gemini-3-pro-preview",
       contents: {
         parts: [
@@ -320,7 +341,7 @@ export const checkPhishingFromScreenshot = async (
       config: { responseMimeType: "application/json" }
     });
 
-    const visionData = JSON.parse(visionResponse.text || "{}");
+    const visionData = JSON.parse(visionText || "{}");
     const foundUrl = visionData.found_url;
     const impersonation = visionData.visual_impersonation || "Generic page";
 

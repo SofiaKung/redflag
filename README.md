@@ -4,7 +4,7 @@
 
 # RedFlag
 
-A client-side fraud detection app that combines real-time technical intelligence with AI analysis to identify phishing, scams, and malicious links.
+A fraud detection app that combines real-time technical intelligence with AI analysis to identify phishing, scams, and malicious links.
 
 ## Run Locally
 
@@ -15,8 +15,17 @@ A client-side fraud detection app that combines real-time technical intelligence
 2. Create a `.env` file with the following keys:
    ```
    GEMINI_API_KEY=your_gemini_api_key
+   # Optional override if you use a separate key for Safe Browsing
+   SAFE_BROWSING_API_KEY=your_safe_browsing_api_key
    WHOIS_API_KEY=your_whoxy_api_key
    BROWSERLESS_TOKEN=your_browserless_token
+   # Required in production: comma-separated allowlist
+   # (e.g. https://yourapp.com,https://www.yourapp.com)
+   ALLOWED_ORIGINS=https://yourapp.com
+   # Optional per-route rate limits (per IP per minute)
+   RATE_LIMIT_GEMINI_PER_MIN=10
+   RATE_LIMIT_LINK_INTEL_PER_MIN=30
+   RATE_LIMIT_SCREENSHOT_PER_MIN=20
    # Optional: override screenshot backend route (defaults to /api/screenshot)
    VITE_SCREENSHOT_ENDPOINT=/api/screenshot
    ```
@@ -25,9 +34,21 @@ A client-side fraud detection app that combines real-time technical intelligence
 
 ## Architecture
 
+### Secret Handling
+
+- `GEMINI_API_KEY`, `WHOIS_API_KEY`, and `BROWSERLESS_TOKEN` are read on the server path only.
+- Frontend calls same-origin API routes (`/api/gemini`, `/api/link-intel-secrets`, `/api/screenshot`).
+- No API keys are injected into the browser bundle.
+
+### API Protection
+
+- Rate limiting is enabled on server routes (`/api/gemini`, `/api/link-intel-secrets`, `/api/screenshot`) using per-IP in-memory buckets.
+- Origin validation is enforced (`ALLOWED_ORIGINS` required in production; dev falls back to same-host derived origin).
+- URL payloads are validated to block local/internal SSRF targets (e.g. `localhost`, loopback/private IPs, private DNS resolutions).
+
 ### Gemini LLM Calls
 
-All LLM calls use **Google Gemini** (`@google/genai`) with structured JSON output. There are **3 separate Gemini functions** in `services/geminiService.ts`:
+All LLM calls use **Google Gemini** through the backend route `/api/gemini` with structured JSON output. There are **3 separate Gemini functions** in `services/geminiService.ts`:
 
 | # | Function | Model | Trigger | Input | Output |
 |---|----------|-------|---------|-------|--------|
@@ -84,3 +105,12 @@ Link preview uses a same-origin backend endpoint at `/api/screenshot`:
 - In production, the repo includes `api/screenshot.js` (serverless handler) that forwards screenshot requests to Browserless using `BROWSERLESS_TOKEN` on the server side.
 
 This avoids direct browser-to-Browserless calls and prevents CORS failures in production.
+
+### Secret Link Intel Backend
+
+The app uses a same-origin backend endpoint at `/api/link-intel-secrets` for secret-dependent checks:
+
+- Google Safe Browsing lookup
+- Whoxy WHOIS fallback lookup
+
+Public checks (DNS, RDAP, GeoIP, homograph, redirects) still run client-side.
