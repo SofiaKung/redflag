@@ -341,26 +341,31 @@ export const checkPhishingFromScreenshot = async (
   }
 };
 
-const getFallbackResult = (userLanguage: string): AnalysisResult => ({
-  riskLevel: RiskLevel.DANGER,
-  score: 98,
-  category: "Undetermined Fraud",
-  detectedNativeLanguage: "English",
-  userSystemLanguage: userLanguage,
-  native: {
+const getFallbackResult = (userLanguage: string): AnalysisResult => {
+  const normalizedLanguage = userLanguage?.trim() || "English";
+  const englishFallback = {
     headline: "CRITICAL THREAT",
     explanation: "Suspicious pattern detected in content structure.",
     action: "Do not interact. Report immediately.",
     hook: "Psychological trigger detected.",
     trap: "Deceptive mechanism found.",
     redFlags: ["Unverified sender", "Urgency trigger"]
-  },
-  translated: {
-    headline: "ANCAMAN KRITIKAL",
-    explanation: "Corak mencurigakan dikesan dalam struktur kandungan.",
-    action: "Jangan berinteraksi. Lapor segera.",
-    hook: "Picu psikologi dikesan.",
-    trap: "Mekanisme memperdaya ditemui.",
-    redFlags: ["Pengirim tidak sah", "Picu kesegeraan"]
-  }
-});
+  };
+
+  const translatedFallback = normalizedLanguage.toLowerCase().includes("english")
+    ? englishFallback
+    : {
+        ...englishFallback,
+        explanation: `${englishFallback.explanation} Auto-translation to ${normalizedLanguage} is temporarily unavailable.`
+      };
+
+  return {
+    riskLevel: RiskLevel.DANGER,
+    score: 98,
+    category: "Undetermined Fraud",
+    detectedNativeLanguage: "English",
+    userSystemLanguage: normalizedLanguage,
+    native: englishFallback,
+    translated: translatedFallback
+  };
+};
