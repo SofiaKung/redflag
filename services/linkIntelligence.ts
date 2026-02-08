@@ -9,8 +9,9 @@
  * Checks:
  *  1. DNS Resolution → Google DNS-over-HTTPS
  *  2. GeoIP Lookup → ipwho.is
- *  3. Homograph/Punycode Detection → Pure JS (local)
- *  4. Safe Browsing + Whoxy WHOIS → backend (/api/link-intel-secrets)
+ *  3. Domain Age + Registrant → RDAP (primary), Whoxy WHOIS (fallback)
+ *  4. Homograph/Punycode Detection → Pure JS (local)
+ *  5. Safe Browsing + Whoxy WHOIS → backend (/api/link-intel-secrets)
  */
 
 export interface GeoMismatch {
@@ -104,8 +105,183 @@ async function lookupGeoIP(ip: string): Promise<GeoIPResult | null> {
 }
 
 // ============================================
-// CHECK 3: Domain Age (computed from Whoxy WHOIS date)
+// CHECK 3: Domain Age via RDAP (IANA standard)
 // ============================================
+
+// Cache the RDAP bootstrap data
+let rdapBootstrap: any = null;
+
+async function getRdapServer(tld: string): Promise<string | null> {
+  try {
+    if (!rdapBootstrap) {
+      const res = await fetch('https://data.iana.org/rdap/dns.json');
+      if (!res.ok) return null;
+      rdapBootstrap = await res.json();
+    }
+
+    for (const entry of rdapBootstrap.services) {
+      if (entry[0].includes(tld)) {
+        return entry[1][0];
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+interface RdapResult {
+  registrationDate: string | null;
+  registrar: string | null;
+  registrantName: string | null;
+  registrantOrg: string | null;
+  registrantStreet: string | null;
+  registrantCity: string | null;
+  registrantState: string | null;
+  registrantPostalCode: string | null;
+  registrantCountry: string | null;
+  registrantEmail: string | null;
+  registrantTelephone: string | null;
+  privacyProtected: boolean;
+}
+
+function parseRegistrantFromEntities(entities: any[]): Omit<RdapResult, 'registrationDate' | 'registrar'> {
+  const empty = {
+    registrantName: null, registrantOrg: null, registrantStreet: null,
+    registrantCity: null, registrantState: null, registrantPostalCode: null,
+    registrantCountry: null, registrantEmail: null, registrantTelephone: null,
+    privacyProtected: false,
+  };
+
+  for (const entity of entities) {
+    if (!entity.roles?.includes('registrant')) continue;
+    const vcard = entity.vcardArray?.[1];
+    if (!vcard) continue;
+
+    let name: string | null = null;
+    let org: string | null = null;
+    let street: string | null = null;
+    let city: string | null = null;
+    let state: string | null = null;
+    let postalCode: string | null = null;
+    let country: string | null = null;
+    let email: string | null = null;
+    let tel: string | null = null;
+
+    for (const field of vcard) {
+      const [type, , , value] = field;
+      if (type === 'fn' && value) name = value;
+      if (type === 'org' && value) org = value;
+      if (type === 'email' && value) email = value;
+      if (type === 'tel') tel = (typeof value === 'string' ? value : null)?.replace(/^tel:/, '') || null;
+      if (type === 'adr' && Array.isArray(value)) {
+        street = value[2] || null;
+        city = value[3] || null;
+        state = value[4] || null;
+        postalCode = value[5] || null;
+        country = value[6] || null;
+      }
+    }
+
+    const clean = (val: string | null): string | null => {
+      if (!val || val.trim() === '') return null;
+      const lower = val.toLowerCase();
+      if (lower.includes('redacted for privacy') && lower.length < 30) return null;
+      return val;
+    };
+
+    const orgLower = (org || '').toLowerCase();
+    const nameLower = (name || '').toLowerCase();
+    const privacyKeywords = ['privacy', 'proxy', 'whoisguard', 'domains by proxy', 'withheld', 'private', 'data protected'];
+    const privacyProtected = privacyKeywords.some(kw => orgLower.includes(kw) || nameLower.includes(kw));
+
+    return {
+      registrantName: clean(name),
+      registrantOrg: org || null,
+      registrantStreet: clean(street),
+      registrantCity: clean(city),
+      registrantState: clean(state),
+      registrantPostalCode: clean(postalCode),
+      registrantCountry: clean(country),
+      registrantEmail: email || null,
+      registrantTelephone: tel || null,
+      privacyProtected,
+    };
+  }
+
+  return empty;
+}
+
+async function rdapLookup(domain: string): Promise<RdapResult | null> {
+  try {
+    const tld = domain.split('.').pop();
+    if (!tld) return null;
+
+    const server = await getRdapServer(tld);
+    if (!server) return null;
+
+    const res = await fetch(`${server}domain/${domain}`, {
+      headers: { 'Accept': 'application/rdap+json' }
+    });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+
+    const events = data.events || [];
+    const registration = events.find((e: any) => e.eventAction === 'registration');
+
+    let registrar: string | null = null;
+    const entities = data.entities || [];
+    for (const entity of entities) {
+      if (entity.roles?.includes('registrar')) {
+        registrar = entity.vcardArray?.[1]?.find((v: any) => v[0] === 'fn')?.[3]
+          || entity.handle
+          || null;
+        break;
+      }
+    }
+
+    let registrant = parseRegistrantFromEntities(entities);
+
+    if (!registrant.registrantOrg && !registrant.registrantName) {
+      const relatedLink = (data.links || []).find(
+        (l: any) => l.rel === 'related' && l.href?.includes('/domain/')
+      );
+      if (relatedLink?.href) {
+        try {
+          const registrarRes = await fetch(relatedLink.href, {
+            headers: { 'Accept': 'application/rdap+json' }
+          });
+          if (registrarRes.ok) {
+            const registrarData = await registrarRes.json();
+            registrant = parseRegistrantFromEntities(registrarData.entities || []);
+            if (!registration) {
+              const regEvents = registrarData.events || [];
+              const regEvt = regEvents.find((e: any) => e.eventAction === 'registration');
+              if (regEvt?.eventDate) {
+                return {
+                  registrationDate: regEvt.eventDate,
+                  registrar,
+                  ...registrant,
+                };
+              }
+            }
+          }
+        } catch {
+          // Registrar RDAP failed, continue with what we have
+        }
+      }
+    }
+
+    return {
+      registrationDate: registration?.eventDate || null,
+      registrar,
+      ...registrant,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function formatDomainAge(registrationDate: string): string {
   try {
@@ -213,6 +389,7 @@ interface WhoisResult {
 
 interface SecretIntelResult {
   safeBrowsingThreats: string[];
+  safeBrowsingSuccess: boolean;
   whois: WhoisResult | null;
 }
 
@@ -231,6 +408,7 @@ async function fetchSecretIntel(url: string, domain: string): Promise<SecretInte
       safeBrowsingThreats: Array.isArray(data?.safeBrowsingThreats)
         ? data.safeBrowsingThreats.filter((threat: unknown) => typeof threat === 'string')
         : [],
+      safeBrowsingSuccess: data?.safeBrowsingSuccess === true,
       whois: data?.whois || null,
     };
   } catch {
@@ -342,9 +520,10 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   }
 
   // Run checks in parallel for speed
-  const [dnsResult, homographResult, secretIntelResult] =
+  const [dnsResult, rdapResult, homographResult, secretIntelResult] =
     await Promise.allSettled([
       resolveDNS(hostname),
+      rdapLookup(registrableDomain),
       Promise.resolve(checkHomograph(hostname)),
       fetchSecretIntel(normalizedUrl, registrableDomain),
     ]);
@@ -373,21 +552,38 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
     checksCompleted.push('homograph');
   }
 
+  // Process RDAP
+  let domainAge: string | null = null;
+  let registrationDate: string | null = null;
+  let registrar: string | null = null;
+
+  if (rdapResult.status === 'fulfilled' && rdapResult.value) {
+    registrationDate = rdapResult.value.registrationDate;
+    registrar = rdapResult.value.registrar;
+    if (registrationDate) {
+      domainAge = formatDomainAge(registrationDate);
+    }
+    checksCompleted.push('rdap');
+  } else {
+    checksFailed.push('rdap');
+  }
+
   // Process Secret Intel (Safe Browsing + Whoxy WHOIS)
   let safeBrowsingThreats: string[] = [];
   let whois: WhoisResult | null = null;
   if (secretIntelResult.status === 'fulfilled' && secretIntelResult.value) {
     safeBrowsingThreats = secretIntelResult.value.safeBrowsingThreats;
     whois = secretIntelResult.value.whois;
-    checksCompleted.push('safe_browsing');
+    if (secretIntelResult.value.safeBrowsingSuccess) {
+      checksCompleted.push('safe_browsing');
+    } else {
+      checksFailed.push('safe_browsing');
+    }
   } else {
     checksFailed.push('safe_browsing');
   }
 
-  // Process Registrant from Whoxy WHOIS
-  let domainAge: string | null = null;
-  let registrationDate: string | null = null;
-  let registrar: string | null = null;
+  // Process Registrant: RDAP (primary) → Whoxy (fallback)
   let registrantName: string | null = null;
   let registrantOrg: string | null = null;
   let registrantStreet: string | null = null;
@@ -399,24 +595,45 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   let registrantTelephone: string | null = null;
   let privacyProtected = false;
 
+  // Try RDAP registrant data first (from registrar referral)
+  const rdap = rdapResult.status === 'fulfilled' ? rdapResult.value : null;
+  if (rdap && (rdap.registrantOrg || rdap.registrantName)) {
+    registrantName = rdap.registrantName;
+    registrantOrg = rdap.registrantOrg;
+    registrantStreet = rdap.registrantStreet;
+    registrantCity = rdap.registrantCity;
+    registrantState = rdap.registrantState;
+    registrantPostalCode = rdap.registrantPostalCode;
+    registrantCountry = rdap.registrantCountry;
+    registrantEmail = rdap.registrantEmail;
+    registrantTelephone = rdap.registrantTelephone;
+    privacyProtected = rdap.privacyProtected;
+    checksCompleted.push('whois');
+  }
+
+  // Whoxy fallback: use if RDAP didn't return registrant data
   if (whois) {
-    registrantName = whois.registrantName;
-    registrantOrg = whois.registrantOrg;
-    registrantStreet = whois.registrantStreet;
-    registrantCity = whois.registrantCity;
-    registrantState = whois.registrantState;
-    registrantPostalCode = whois.registrantPostalCode;
-    registrantCountry = whois.registrantCountry;
-    registrantEmail = whois.registrantEmail;
-    registrantTelephone = whois.registrantTelephone;
-    privacyProtected = whois.privacyProtected;
-    if (whois.registrarName) registrar = whois.registrarName;
-    if (whois.whoisCreatedDate) {
+    if (!registrantOrg && !registrantName) {
+      registrantName = whois.registrantName;
+      registrantOrg = whois.registrantOrg;
+      registrantStreet = whois.registrantStreet;
+      registrantCity = whois.registrantCity;
+      registrantState = whois.registrantState;
+      registrantPostalCode = whois.registrantPostalCode;
+      registrantCountry = whois.registrantCountry;
+      registrantEmail = whois.registrantEmail;
+      registrantTelephone = whois.registrantTelephone;
+      privacyProtected = whois.privacyProtected;
+      if (!checksCompleted.includes('whois')) checksCompleted.push('whois');
+    }
+    if (!registrar && whois.registrarName) {
+      registrar = whois.registrarName;
+    }
+    if (!registrationDate && whois.whoisCreatedDate) {
       registrationDate = whois.whoisCreatedDate;
       domainAge = formatDomainAge(whois.whoisCreatedDate);
     }
-    checksCompleted.push('whois');
-  } else {
+  } else if (!checksCompleted.includes('whois')) {
     checksFailed.push('whois');
   }
 

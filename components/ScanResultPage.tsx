@@ -621,8 +621,9 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
 
       {/* ===== STICKY FOOTER ===== */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-neutral-100 z-50">
-        {result.riskLevel === RiskLevel.DANGER ? (
-          <>
+        <div className="max-w-md mx-auto px-1">
+          {result.riskLevel === RiskLevel.DANGER ? (
+            <>
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={() => {
@@ -646,9 +647,9 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             >
               <RefreshCw size={12} /> START ANOTHER SCAN
             </button>
-          </>
-        ) : result.riskLevel === RiskLevel.CAUTION ? (
-          <>
+            </>
+          ) : result.riskLevel === RiskLevel.CAUTION ? (
+            <>
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleOpenLink}
@@ -663,9 +664,9 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             >
               <RefreshCw size={12} /> START ANOTHER SCAN
             </button>
-          </>
-        ) : (
-          <>
+            </>
+          ) : (
+            <>
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleOpenLink}
@@ -680,8 +681,9 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             >
               <RefreshCw size={12} /> START ANOTHER SCAN
             </button>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Risk Override Confirmation Modal */}

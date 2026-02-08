@@ -6,7 +6,7 @@ function cleanWhoisValue(value) {
 }
 
 async function checkSafeBrowsing(url, apiKey) {
-  if (!apiKey) return [];
+  if (!apiKey) return { threats: [], success: false };
   try {
     const body = {
       client: { clientId: 'redflag', clientVersion: '1.0' },
@@ -24,7 +24,7 @@ async function checkSafeBrowsing(url, apiKey) {
     };
 
     const response = await fetch(
-      `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${encodeURIComponent(apiKey)}`,
+      `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${encodeURIComponent(apiKey.trim())}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -32,13 +32,14 @@ async function checkSafeBrowsing(url, apiKey) {
       }
     );
 
-    if (!response.ok) return [];
+    if (!response.ok) return { threats: [], success: false };
     const data = await response.json();
-    return Array.isArray(data?.matches)
+    const threats = Array.isArray(data?.matches)
       ? data.matches.map((match) => match?.threatType).filter((threatType) => typeof threatType === 'string')
       : [];
+    return { threats, success: true };
   } catch {
-    return [];
+    return { threats: [], success: false };
   }
 }
 
@@ -96,10 +97,14 @@ export async function getLinkIntelSecrets({
   safeBrowsingApiKey,
   whoisApiKey,
 }) {
-  const [safeBrowsingThreats, whois] = await Promise.all([
+  const [safeBrowsingResult, whois] = await Promise.all([
     checkSafeBrowsing(url, safeBrowsingApiKey),
     whoisLookup(domain, whoisApiKey),
   ]);
 
-  return { safeBrowsingThreats, whois };
+  return {
+    safeBrowsingThreats: safeBrowsingResult.threats,
+    safeBrowsingSuccess: safeBrowsingResult.success,
+    whois,
+  };
 }

@@ -413,17 +413,20 @@ const App: React.FC = () => {
               </motion.div>
 
               <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-neutral-100 z-50">
-                <button
-                  onClick={() => alert(`Shield Action Triggered: ${activeContent.action}`)}
-                  className={`w-full py-5 rounded-2xl flex items-center justify-center font-bold text-sm shadow-2xl transition-all active:scale-95 ${
-                    result.riskLevel === RiskLevel.DANGER ? 'bg-red-600 text-white shadow-red-500/30' : 'bg-emerald-600 text-white shadow-emerald-500/30'
-                  }`}
-                >
-                  {activeContent.action}
-                </button>
-                <button onClick={reset} className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors">
+                <div className="max-w-md mx-auto px-1">
+                  <div
+                    className={`w-full py-5 px-6 rounded-2xl text-center font-bold text-sm ${
+                      result.riskLevel === RiskLevel.DANGER
+                        ? 'bg-red-50 text-red-800 border border-red-200'
+                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    {activeContent.action}
+                  </div>
+                  <button onClick={reset} className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors">
                   <RefreshCw size={12} /> START ANOTHER SCAN
-                </button>
+                  </button>
+                </div>
               </div>
             </motion.div>
           )}

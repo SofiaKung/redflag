@@ -314,6 +314,19 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                   )}
                 </div>
 
+                {/* Registrar */}
+                <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-neutral-400">
+                      <Building2 size={12} />
+                      <span className="text-[9px] uppercase font-black tracking-wider">Registrar</span>
+                    </div>
+                  </div>
+                  <p className="text-sm font-bold text-slate-800">
+                    {verified?.registrar || 'Unknown'}
+                  </p>
+                </div>
+
                 {/* Server Location */}
                 <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
                   <div className="flex items-center justify-between mb-2">
@@ -337,11 +350,11 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                   )}
                 </div>
 
-                {/* Registrant (WHOIS) */}
+                {/* Registrant Location (WHOIS) */}
                 <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 text-neutral-400">
-                      <Building2 size={12} />
+                      <MapPin size={12} />
                       <span className="text-[9px] uppercase font-black tracking-wider">Registrant</span>
                     </div>
                     {!(verified && verified.checksCompleted.includes('whois')) && (
@@ -349,75 +362,41 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                     )}
                   </div>
                   <p className={`text-sm font-bold ${
-                    verified?.privacyProtected && !verified?.registrantOrg ? 'text-amber-600' : 'text-slate-800'
+                    verified?.privacyProtected ? 'text-amber-600' : verified?.geoMismatch ? 'text-red-600' : 'text-slate-800'
                   }`}>
-                    {verified?.registrantOrg
-                      || verified?.registrantName
-                      || (verified?.privacyProtected ? 'Privacy Hidden' : 'Unknown')}
+                    {verified?.registrantOrg || verified?.registrantName
+                      || (verified?.privacyProtected ? 'Privacy Protected' : 'Unknown')}
                   </p>
-                  {verified?.registrantName && verified?.registrantOrg && (
-                    <p className="text-[9px] font-mono text-neutral-400 mt-1 truncate">
-                      {verified.registrantName}
-                    </p>
-                  )}
+                  <p className="text-[9px] font-mono text-neutral-400 mt-1">
+                    {[verified?.registrantCity, verified?.registrantCountry]
+                      .filter(Boolean).join(', ') || 'Location unknown'}
+                  </p>
                 </div>
 
-                {/* Owner Location (WHOIS) */}
+                {/* Owner Email */}
                 <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 text-neutral-400">
-                      <MapPin size={12} />
-                      <span className="text-[9px] uppercase font-black tracking-wider">Owner Location</span>
-                    </div>
-                    {!(verified && verified.checksCompleted.includes('whois')) && (
-                      <CircleAlert size={10} className="text-amber-400" />
-                    )}
+                  <div className="flex items-center gap-2 text-neutral-400 mb-2">
+                    <Mail size={12} />
+                    <span className="text-[9px] uppercase font-black tracking-wider">Contact Email</span>
                   </div>
-                  <p className={`text-sm font-bold ${
-                    verified?.geoMismatch ? 'text-red-600' : 'text-slate-800'
+                  <p className={`text-[11px] font-bold break-all leading-snug ${
+                    verified?.registrantEmail?.includes('withheldforprivacy') || verified?.registrantEmail?.includes('whoisguard')
+                      ? 'text-amber-600' : 'text-slate-800'
                   }`}>
-                    {[verified?.registrantCity, verified?.registrantState, verified?.registrantCountry]
-                      .filter(Boolean).join(', ') || 'Unknown'}
+                    {verified?.registrantEmail || 'Not available'}
                   </p>
-                  {verified?.geoMismatch && verified?.serverCountry && (
-                    <p className="text-[9px] font-mono text-red-500 mt-1">
-                      Server: {verified.serverCountry}
-                    </p>
-                  )}
-                  {verified?.registrantStreet && (
-                    <p className="text-[9px] font-mono text-neutral-400 mt-1 truncate" title={verified.registrantStreet}>
-                      {verified.registrantStreet}
-                    </p>
-                  )}
                 </div>
 
-                {/* Owner Email & Phone */}
-                {(verified?.registrantEmail || verified?.registrantTelephone) && (
-                  <div className="col-span-2 grid grid-cols-2 gap-3">
-                    {verified.registrantEmail && (
-                      <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
-                        <div className="flex items-center gap-2 text-neutral-400 mb-2">
-                          <Mail size={12} />
-                          <span className="text-[9px] uppercase font-black tracking-wider">Owner Email</span>
-                        </div>
-                        <p className="text-sm font-bold text-slate-800 break-all leading-snug">
-                          {verified.registrantEmail}
-                        </p>
-                      </div>
-                    )}
-                    {verified.registrantTelephone && (
-                      <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
-                        <div className="flex items-center gap-2 text-neutral-400 mb-2">
-                          <Phone size={12} />
-                          <span className="text-[9px] uppercase font-black tracking-wider">Owner Phone</span>
-                        </div>
-                        <p className="text-sm font-bold text-slate-800">
-                          {verified.registrantTelephone}
-                        </p>
-                      </div>
-                    )}
+                {/* Owner Phone */}
+                <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
+                  <div className="flex items-center gap-2 text-neutral-400 mb-2">
+                    <Phone size={12} />
+                    <span className="text-[9px] uppercase font-black tracking-wider">Contact Phone</span>
                   </div>
-                )}
+                  <p className="text-sm font-bold text-slate-800">
+                    {verified?.registrantTelephone || 'Not available'}
+                  </p>
+                </div>
               </div>
 
               {/* Verification legend */}
@@ -518,23 +497,25 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
 
       {/* ===== STICKY FOOTER ===== */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-neutral-100 z-50">
-        <div
-          className={`w-full py-5 px-6 rounded-2xl text-center font-bold text-sm ${
-            result.riskLevel === RiskLevel.DANGER
-              ? 'bg-red-50 text-red-800 border border-red-200'
-              : result.riskLevel === RiskLevel.CAUTION
-                ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-          }`}
-        >
-          {activeContent.action}
+        <div className="max-w-md mx-auto px-1">
+          <div
+            className={`w-full py-5 px-6 rounded-2xl text-center font-bold text-sm ${
+              result.riskLevel === RiskLevel.DANGER
+                ? 'bg-red-50 text-red-800 border border-red-200'
+                : result.riskLevel === RiskLevel.CAUTION
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+            }`}
+          >
+            {activeContent.action}
+          </div>
+          <button
+            onClick={onReset}
+            className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+          >
+            <RefreshCw size={12} /> START ANOTHER SCAN
+          </button>
         </div>
-        <button
-          onClick={onReset}
-          className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-        >
-          <RefreshCw size={12} /> START ANOTHER SCAN
-        </button>
       </div>
     </motion.div>
   );
