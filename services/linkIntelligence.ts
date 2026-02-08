@@ -78,7 +78,7 @@ async function resolveDNS(domain: string): Promise<string | null> {
 }
 
 // ============================================
-// CHECK 2: GeoIP via ip-api.com (free, CORS-friendly)
+// CHECK 2: GeoIP via ipwho.is (HTTPS, CORS-friendly)
 // ============================================
 interface GeoIPResult {
   country: string;
@@ -89,11 +89,20 @@ interface GeoIPResult {
 
 async function lookupGeoIP(ip: string): Promise<GeoIPResult | null> {
   try {
-    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,city,isp,org`);
+    const res = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`);
     if (!res.ok) return null;
     const data = await res.json();
-    if (data.status !== 'success') return null;
-    return data as GeoIPResult;
+    if (data.success === false) return null;
+
+    const country = typeof data.country === 'string' ? data.country : null;
+    if (!country) return null;
+
+    return {
+      country,
+      city: typeof data.city === 'string' ? data.city : '',
+      isp: typeof data.connection?.isp === 'string' ? data.connection.isp : '',
+      org: typeof data.connection?.org === 'string' ? data.connection.org : '',
+    };
   } catch {
     return null;
   }

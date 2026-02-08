@@ -36,22 +36,34 @@ const App: React.FC = () => {
   // Detect user's country on mount
   useEffect(() => {
     const detectCountry = async () => {
-      try {
-        const res = await fetch('http://ip-api.com/json/?fields=country,countryCode');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.country) setUserRegion({ country: data.country, countryCode: data.countryCode });
-        }
-      } catch {
-        // Fallback: infer from browser locale
+      const fallbackFromLocale = () => {
         try {
           const regionCode = navigator.language.split('-')[1];
           if (regionCode) {
             const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(regionCode.toUpperCase());
             if (name) setUserRegion({ country: name, countryCode: regionCode.toUpperCase() });
           }
-        } catch { /* silent */ }
+        } catch {
+          // silent
+        }
+      };
+
+      try {
+        const res = await fetch('https://ipwho.is/');
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.success !== false && data?.country) {
+            const countryCode = typeof data.country_code === 'string' ? data.country_code : '';
+            setUserRegion({ country: data.country, countryCode });
+            return;
+          }
+        }
+      } catch {
+        // ignore and use locale fallback
       }
+
+      // Fallback: infer from browser locale
+      fallbackFromLocale();
     };
     detectCountry();
   }, []);
