@@ -122,6 +122,12 @@ const analyzeUrlForensic = async (
     ${intel.homographAttack ? '- HOMOGRAPH ATTACK DETECTED: Domain uses deceptive characters (Punycode/Cyrillic)' : '- Homograph Check: Clean'}
     ${intel.safeBrowsingThreats.length > 0 ? `- Google Safe Browsing: FLAGGED — ${intel.safeBrowsingThreats.join(', ')}` : '- Google Safe Browsing: No known threats (or API not available)'}
     ${intel.redirectCount > 0 ? `- Redirect detected: Final URL is ${intel.finalUrl}` : '- No redirects detected'}
+    ${intel.registrantOrg || intel.registrantName ? `- WHOIS Registrant: ${intel.registrantOrg || intel.registrantName}${intel.registrantCountry ? ` in ${intel.registrantCountry}` : ''}` : '- WHOIS Registrant: Not available'}
+    ${intel.registrantStreet || intel.registrantCity ? `- Registrant Address: ${[intel.registrantStreet, intel.registrantCity, intel.registrantState, intel.registrantPostalCode, intel.registrantCountry].filter(Boolean).join(', ')}` : ''}
+    ${intel.registrantEmail ? `- Registrant Email: ${intel.registrantEmail}` : ''}
+    ${intel.registrantTelephone ? `- Registrant Phone: ${intel.registrantTelephone}` : ''}
+    ${intel.privacyProtected ? '- WHOIS Privacy: PROTECTED (registrant details hidden behind privacy service)' : '- WHOIS Privacy: Not protected (registrant details visible)'}
+    ${intel.geoMismatch.detected ? `- GEO-MISMATCH ALERT (${intel.geoMismatch.severity.toUpperCase()}): ${intel.geoMismatch.details.join('; ')}` : '- Geo-Mismatch: No inconsistencies detected'}
     - Checks completed: ${intel.checksCompleted.join(', ') || 'none'}
     - Checks failed: ${intel.checksFailed.join(', ') || 'none'}
   `;
@@ -144,6 +150,15 @@ const analyzeUrlForensic = async (
     4. Check for URL shorteners (bit.ly, t.co) used to hide real destination.
     5. Analyze URL structure for redirect patterns or suspicious query parameters.
 
+    WHOIS INTELLIGENCE ANALYSIS (critical — analyze these patterns):
+    - If registrant org/name is a PRIVACY PROXY (e.g. "Withheld for Privacy", "Domains By Proxy"), flag this — legitimate businesses typically use their real identity.
+    - If registrant country differs from server country, explain why this is suspicious for the specific brand/service the site claims to be.
+    - If the registrant email domain does NOT match the site domain, flag the inconsistency.
+    - If the domain is very new (days/weeks old) AND uses WHOIS privacy, this is a strong fraud signal — call it out.
+    - If the registrant address is in an unexpected country for the claimed service (e.g. a "PayNow Singapore" site registered in Iceland), highlight this geographic mismatch.
+    - If registrant details are completely unavailable (no org, no name, no address), note this as reduced transparency.
+    - Cross-reference: Does the registrant org match what the site claims to be? (e.g. facebook.com should be Meta Platforms, Inc.)
+
     LINK METADATA RULES:
     - analyzedUrl: The exact URL being analyzed
     - impersonating: What legitimate brand/entity this URL impersonates. Use "None detected" if no impersonation.
@@ -156,7 +171,7 @@ const analyzeUrlForensic = async (
     STANDARD ANALYSIS:
     - Classify fraud type (Phishing, Smishing, Brand Impersonation, etc.)
     - Generate headline, explanation, action, hook, trap, and redFlags
-    - IMPORTANT: Incorporate the REAL technical data into your explanation and redFlags
+    - IMPORTANT: Incorporate the REAL technical data AND WHOIS intelligence findings into your explanation and redFlags. Mention specific WHOIS details (registrant, country, privacy status) when relevant.
     - Generate in both Native (English technical) and Translated (${userLanguage}) versions
     - If device language matches native language, Translated version must be in English
 
@@ -239,6 +254,19 @@ const analyzeUrlForensic = async (
         safeBrowsingThreats: intel.safeBrowsingThreats,
         finalUrl: intel.finalUrl,
         redirectCount: intel.redirectCount,
+        registrantName: intel.registrantName,
+        registrantOrg: intel.registrantOrg,
+        registrantStreet: intel.registrantStreet,
+        registrantCity: intel.registrantCity,
+        registrantState: intel.registrantState,
+        registrantPostalCode: intel.registrantPostalCode,
+        registrantCountry: intel.registrantCountry,
+        registrantEmail: intel.registrantEmail,
+        registrantTelephone: intel.registrantTelephone,
+        privacyProtected: intel.privacyProtected,
+        geoMismatch: intel.geoMismatch.detected,
+        geoMismatchSeverity: intel.geoMismatch.severity,
+        geoMismatchDetails: intel.geoMismatch.details,
         checksCompleted: intel.checksCompleted,
         checksFailed: intel.checksFailed,
       };

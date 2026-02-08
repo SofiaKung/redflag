@@ -42,6 +42,21 @@ export interface LinkMetadata {
     safeBrowsingThreats: string[];     // From Google Safe Browsing
     finalUrl: string | null;           // After following redirects
     redirectCount: number;
+    // Registrant (RDAP primary, Whoxy fallback)
+    registrantName: string | null;
+    registrantOrg: string | null;
+    registrantStreet: string | null;
+    registrantCity: string | null;
+    registrantState: string | null;
+    registrantPostalCode: string | null;
+    registrantCountry: string | null;
+    registrantEmail: string | null;
+    registrantTelephone: string | null;
+    privacyProtected: boolean;
+    // Geo-Mismatch Detection
+    geoMismatch: boolean;
+    geoMismatchSeverity: 'high' | 'medium' | 'low' | 'none';
+    geoMismatchDetails: string[];
     checksCompleted: string[];         // Which checks succeeded
     checksFailed: string[];            // Which checks failed
   };

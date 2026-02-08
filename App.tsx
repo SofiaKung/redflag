@@ -1,16 +1,17 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ScanLine, 
-  Search, 
-  Link as LinkIcon, 
+import {
+  ScanLine,
+  Search,
+  Link as LinkIcon,
   RefreshCw,
   Globe,
   Zap,
   Anchor,
   ShieldAlert,
-  ChevronRight
+  ChevronRight,
+  MapPin
 } from 'lucide-react';
 import { AppState, RiskLevel, AnalysisResult } from './types';
 import { analyzeFraudContent, checkPhishingFromScreenshot, verifyUrlString } from './services/geminiService';
@@ -30,6 +31,30 @@ const App: React.FC = () => {
   const [analysisSource, setAnalysisSource] = useState<'qr' | 'screenshot' | 'link' | null>(null);
   const [scannedUrl, setScannedUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [userRegion, setUserRegion] = useState<{ country: string; countryCode: string } | null>(null);
+
+  // Detect user's country on mount
+  useEffect(() => {
+    const detectCountry = async () => {
+      try {
+        const res = await fetch('http://ip-api.com/json/?fields=country,countryCode');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.country) setUserRegion({ country: data.country, countryCode: data.countryCode });
+        }
+      } catch {
+        // Fallback: infer from browser locale
+        try {
+          const regionCode = navigator.language.split('-')[1];
+          if (regionCode) {
+            const name = new Intl.DisplayNames(['en'], { type: 'region' }).of(regionCode.toUpperCase());
+            if (name) setUserRegion({ country: name, countryCode: regionCode.toUpperCase() });
+          }
+        } catch { /* silent */ }
+      }
+    };
+    detectCountry();
+  }, []);
 
   const getReadableLanguage = () => {
     try {
@@ -109,8 +134,10 @@ const App: React.FC = () => {
           <span className="font-black tracking-tighter text-xl text-slate-900 uppercase">REDFLAG</span>
         </div>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100/60 rounded-full border border-neutral-200/50">
-          <ShieldAlert size={10} className="text-neutral-500" />
-          <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest tabular-nums">CORE_V2_ACTIVE</span>
+          <MapPin size={10} className="text-neutral-500" />
+          <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest tabular-nums">
+            {userRegion ? userRegion.countryCode : '...'}
+          </span>
         </div>
       </header>
 
