@@ -17,6 +17,8 @@ A client-side fraud detection app that combines real-time technical intelligence
    GEMINI_API_KEY=your_gemini_api_key
    WHOIS_API_KEY=your_whoxy_api_key
    BROWSERLESS_TOKEN=your_browserless_token
+   # Optional: override screenshot backend route (defaults to /api/screenshot)
+   VITE_SCREENSHOT_ENDPOINT=/api/screenshot
    ```
 3. Run the app:
    `npm run dev`
@@ -65,7 +67,7 @@ Runs **7 parallel checks** via `Promise.allSettled` (no AI involved):
 | Check | API | Purpose |
 |-------|-----|---------|
 | DNS Resolution | Google DNS-over-HTTPS | Resolve domain to IP |
-| GeoIP Lookup | ip-api.com | Server country, city, ISP |
+| GeoIP Lookup | ipwho.is | Server country, city, ISP |
 | RDAP Lookup | IANA RDAP + registrar referral | Domain age, registrar, registrant data |
 | Homograph Detection | Pure JS | Punycode/Cyrillic character detection |
 | Redirect Chain | fetch with manual redirect | Final URL, redirect count |
@@ -73,3 +75,12 @@ Runs **7 parallel checks** via `Promise.allSettled` (no AI involved):
 | WHOIS (fallback) | Whoxy API | Registrant data when RDAP has none |
 
 Registrant data priority: **RDAP (free, follows registrar referral)** → **Whoxy (paid fallback)**
+
+### Safe Link Preview Backend
+
+Link preview uses a same-origin backend endpoint at `/api/screenshot`:
+
+- In local dev, Vite proxies `/api/screenshot` to Browserless.
+- In production, the repo includes `api/screenshot.js` (serverless handler) that forwards screenshot requests to Browserless using `BROWSERLESS_TOKEN` on the server side.
+
+This avoids direct browser-to-Browserless calls and prevents CORS failures in production.

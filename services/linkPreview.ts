@@ -2,12 +2,13 @@
 /**
  * Safe Link Preview Service
  *
- * Uses Browserless.io REST API to capture a screenshot of a target URL
+ * Uses a same-origin backend endpoint to capture a screenshot of a target URL
  * without the user's device ever visiting the site directly.
  */
 
-// Proxied through Vite dev server to avoid CORS (Browserless has no CORS headers)
-const SCREENSHOT_ENDPOINT = '/api/screenshot';
+// Default endpoint works with local Vite proxy and serverless deployments (e.g. /api/screenshot).
+// Override with VITE_SCREENSHOT_ENDPOINT if your backend route differs.
+const SCREENSHOT_ENDPOINT = import.meta.env.VITE_SCREENSHOT_ENDPOINT || '/api/screenshot';
 
 const MOBILE_USER_AGENT =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
