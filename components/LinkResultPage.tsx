@@ -9,7 +9,6 @@ import {
   Server,
   AlertTriangle,
   RefreshCw,
-  ExternalLink,
   Fingerprint,
   CircleAlert,
   MapPin,
@@ -166,7 +165,6 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
       : '',
     verified?.homographAttack ? 'Homograph attack indicators detected' : '',
     verified?.geoMismatch && verified.geoMismatchDetails.length > 0 ? verified.geoMismatchDetails[0] : '',
-    verified?.redirectCount && verified.redirectCount > 0 ? `Redirect chain: ${verified.redirectCount} hop` : '',
     ...activeContent.redFlags,
   ].filter(Boolean).slice(0, 3) as string[];
 
@@ -439,7 +437,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
               )}
 
               {/* Extra verified data: Safe Browsing, Homograph, Redirects */}
-              {verified && (verified.homographAttack || (verified.redirectCount > 0) || verified.checksCompleted.includes('safe_browsing')) && (
+              {verified && (verified.homographAttack || verified.checksCompleted.includes('safe_browsing')) && (
                 <div className="mt-3 p-3 rounded-xl bg-neutral-100/50 border border-neutral-100 space-y-1.5">
                   {verified.checksCompleted.includes('safe_browsing') && (
                     <div className="flex items-center gap-2">
@@ -460,14 +458,6 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                       <AlertTriangle size={10} className="text-red-500" />
                       <span className="text-[10px] font-mono text-red-600 font-bold">
                         HOMOGRAPH ATTACK DETECTED (Punycode/Cyrillic)
-                      </span>
-                    </div>
-                  )}
-                  {verified.redirectCount > 0 && verified.finalUrl && (
-                    <div className="flex items-center gap-2">
-                      <ExternalLink size={10} className="text-amber-500" />
-                      <span className="text-[10px] font-mono text-amber-600 truncate">
-                        Redirects to: {verified.finalUrl}
                       </span>
                     </div>
                   )}

@@ -245,7 +245,9 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
       await navigator.clipboard.writeText(scannedUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch {
+      // Clipboard access may be blocked by browser permissions.
+    }
   };
 
   const handleOpenLink = () => {

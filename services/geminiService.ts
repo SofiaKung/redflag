@@ -146,7 +146,6 @@ const analyzeUrlForensic = async (
     ${intel.registrar ? `- Registrar: ${intel.registrar}` : ''}
     ${intel.homographAttack ? '- HOMOGRAPH ATTACK DETECTED: Domain uses deceptive characters (Punycode/Cyrillic)' : '- Homograph Check: Clean'}
     ${intel.safeBrowsingThreats.length > 0 ? `- Google Safe Browsing: FLAGGED — ${intel.safeBrowsingThreats.join(', ')}` : '- Google Safe Browsing: No known threats (or API not available)'}
-    ${intel.redirectCount > 0 ? `- Redirect detected: Final URL is ${intel.finalUrl}` : '- No redirects detected'}
     ${intel.registrantOrg || intel.registrantName ? `- WHOIS Registrant: ${intel.registrantOrg || intel.registrantName}${intel.registrantCountry ? ` in ${intel.registrantCountry}` : ''}` : '- WHOIS Registrant: Not available'}
     ${intel.registrantStreet || intel.registrantCity ? `- Registrant Address: ${[intel.registrantStreet, intel.registrantCity, intel.registrantState, intel.registrantPostalCode, intel.registrantCountry].filter(Boolean).join(', ')}` : ''}
     ${intel.registrantEmail ? `- Registrant Email: ${intel.registrantEmail}` : ''}
@@ -173,7 +172,7 @@ const analyzeUrlForensic = async (
     2. Identify Suspicious TLDs (.xyz, .top, .pw, .loan, .click, .info etc.).
     3. Look for Brand Impersonation in the subdomain, domain or path.
     4. Check for URL shorteners (bit.ly, t.co) used to hide real destination.
-    5. Analyze URL structure for redirect patterns or suspicious query parameters.
+    5. Analyze URL structure for suspicious query parameters.
 
     WHOIS INTELLIGENCE ANALYSIS (critical — analyze these patterns):
     - If registrant org/name is a PRIVACY PROXY (e.g. "Withheld for Privacy", "Domains By Proxy"), flag this — legitimate businesses typically use their real identity.
@@ -278,8 +277,6 @@ const analyzeUrlForensic = async (
         resolvedIp: intel.resolvedIp,
         homographAttack: intel.homographAttack,
         safeBrowsingThreats: intel.safeBrowsingThreats,
-        finalUrl: intel.finalUrl,
-        redirectCount: intel.redirectCount,
         registrantName: intel.registrantName,
         registrantOrg: intel.registrantOrg,
         registrantStreet: intel.registrantStreet,

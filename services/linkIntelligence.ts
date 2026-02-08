@@ -4,15 +4,13 @@
  *
  * Real technical checks for URL analysis — no AI guessing.
  * Public checks run directly from browser-safe APIs.
- * Secret checks (Safe Browsing / WHOIS fallback) are delegated to a same-origin backend route.
+ * Secret checks (Safe Browsing / WHOIS) are delegated to a same-origin backend route.
  *
- * Layers:
+ * Checks:
  *  1. DNS Resolution → Google DNS-over-HTTPS
- *  2. GeoIP Lookup → ip-api.com
- *  3. Domain Age → RDAP (IANA standard, replaces WHOIS)
- *  4. Homograph/Punycode Detection → Pure JS
- *  5. Redirect Chain → fetch with manual redirect
- *  6. Google Safe Browsing → REST API (requires enabling)
+ *  2. GeoIP Lookup → ipwho.is
+ *  3. Homograph/Punycode Detection → Pure JS (local)
+ *  4. Safe Browsing + Whoxy WHOIS → backend (/api/link-intel-secrets)
  */
 
 export interface GeoMismatch {
@@ -51,10 +49,6 @@ export interface RealLinkIntelligence {
   // Security
   homographAttack: boolean;
   hasPunycode: boolean;
-
-  // Redirect Chain
-  finalUrl: string | null;
-  redirectCount: number;
 
   // Safe Browsing
   safeBrowsingThreats: string[];
@@ -110,192 +104,8 @@ async function lookupGeoIP(ip: string): Promise<GeoIPResult | null> {
 }
 
 // ============================================
-// CHECK 3: Domain Age via RDAP (IANA standard)
+// CHECK 3: Domain Age (computed from Whoxy WHOIS date)
 // ============================================
-
-// Cache the RDAP bootstrap data
-let rdapBootstrap: any = null;
-
-async function getRdapServer(tld: string): Promise<string | null> {
-  try {
-    if (!rdapBootstrap) {
-      const res = await fetch('https://data.iana.org/rdap/dns.json');
-      if (!res.ok) return null;
-      rdapBootstrap = await res.json();
-    }
-
-    for (const entry of rdapBootstrap.services) {
-      if (entry[0].includes(tld)) {
-        return entry[1][0];
-      }
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-interface RdapResult {
-  registrationDate: string | null;
-  registrar: string | null;
-  // Registrant data (from registrar RDAP referral)
-  registrantName: string | null;
-  registrantOrg: string | null;
-  registrantStreet: string | null;
-  registrantCity: string | null;
-  registrantState: string | null;
-  registrantPostalCode: string | null;
-  registrantCountry: string | null;
-  registrantEmail: string | null;
-  registrantTelephone: string | null;
-  privacyProtected: boolean;
-}
-
-// Parse registrant vcard from RDAP entity
-function parseRegistrantFromEntities(entities: any[]): Omit<RdapResult, 'registrationDate' | 'registrar'> {
-  const empty = {
-    registrantName: null, registrantOrg: null, registrantStreet: null,
-    registrantCity: null, registrantState: null, registrantPostalCode: null,
-    registrantCountry: null, registrantEmail: null, registrantTelephone: null,
-    privacyProtected: false,
-  };
-
-  for (const entity of entities) {
-    if (!entity.roles?.includes('registrant')) continue;
-    const vcard = entity.vcardArray?.[1];
-    if (!vcard) continue;
-
-    let name: string | null = null;
-    let org: string | null = null;
-    let street: string | null = null;
-    let city: string | null = null;
-    let state: string | null = null;
-    let postalCode: string | null = null;
-    let country: string | null = null;
-    let email: string | null = null;
-    let tel: string | null = null;
-
-    for (const field of vcard) {
-      const [type, , , value] = field;
-      if (type === 'fn' && value) name = value;
-      if (type === 'org' && value) org = value;
-      if (type === 'email' && value) email = value;
-      if (type === 'tel') tel = (typeof value === 'string' ? value : null)?.replace(/^tel:/, '') || null;
-      if (type === 'adr' && Array.isArray(value)) {
-        // vcard adr: [pobox, ext, street, city, state, postal, country]
-        street = value[2] || null;
-        city = value[3] || null;
-        state = value[4] || null;
-        postalCode = value[5] || null;
-        country = value[6] || null;
-      }
-    }
-
-    // Filter out empty/redacted values
-    const clean = (val: string | null): string | null => {
-      if (!val || val.trim() === '') return null;
-      const lower = val.toLowerCase();
-      if (lower.includes('redacted for privacy') && lower.length < 30) return null;
-      return val;
-    };
-
-    // Detect privacy protection
-    const orgLower = (org || '').toLowerCase();
-    const nameLower = (name || '').toLowerCase();
-    const privacyKeywords = ['privacy', 'proxy', 'whoisguard', 'domains by proxy', 'withheld', 'private', 'data protected'];
-    const privacyProtected = privacyKeywords.some(kw => orgLower.includes(kw) || nameLower.includes(kw));
-
-    return {
-      registrantName: clean(name),
-      registrantOrg: org || null, // Keep org even if privacy proxy (for detection)
-      registrantStreet: clean(street),
-      registrantCity: clean(city),
-      registrantState: clean(state),
-      registrantPostalCode: clean(postalCode),
-      registrantCountry: clean(country),
-      registrantEmail: email || null, // Keep email even if privacy proxy
-      registrantTelephone: tel || null,
-      privacyProtected,
-    };
-  }
-
-  return empty;
-}
-
-async function rdapLookup(domain: string): Promise<RdapResult | null> {
-  try {
-    const tld = domain.split('.').pop();
-    if (!tld) return null;
-
-    const server = await getRdapServer(tld);
-    if (!server) return null;
-
-    const res = await fetch(`${server}domain/${domain}`, {
-      headers: { 'Accept': 'application/rdap+json' }
-    });
-    if (!res.ok) return null;
-
-    const data = await res.json();
-
-    const events = data.events || [];
-    const registration = events.find((e: any) => e.eventAction === 'registration');
-
-    // Extract registrar from entities
-    let registrar: string | null = null;
-    const entities = data.entities || [];
-    for (const entity of entities) {
-      if (entity.roles?.includes('registrar')) {
-        registrar = entity.vcardArray?.[1]?.find((v: any) => v[0] === 'fn')?.[3]
-          || entity.handle
-          || null;
-        break;
-      }
-    }
-
-    // Try to get registrant from registry response first
-    let registrant = parseRegistrantFromEntities(entities);
-
-    // If no registrant data, follow the registrar RDAP referral link
-    if (!registrant.registrantOrg && !registrant.registrantName) {
-      const relatedLink = (data.links || []).find(
-        (l: any) => l.rel === 'related' && l.href?.includes('/domain/')
-      );
-      if (relatedLink?.href) {
-        try {
-          const registrarRes = await fetch(relatedLink.href, {
-            headers: { 'Accept': 'application/rdap+json' }
-          });
-          if (registrarRes.ok) {
-            const registrarData = await registrarRes.json();
-            registrant = parseRegistrantFromEntities(registrarData.entities || []);
-            // Also grab registration date from registrar if not already set
-            if (!registration) {
-              const regEvents = registrarData.events || [];
-              const regEvt = regEvents.find((e: any) => e.eventAction === 'registration');
-              if (regEvt?.eventDate) {
-                return {
-                  registrationDate: regEvt.eventDate,
-                  registrar,
-                  ...registrant,
-                };
-              }
-            }
-          }
-        } catch {
-          // Registrar RDAP failed, continue with what we have
-        }
-      }
-    }
-
-    return {
-      registrationDate: registration?.eventDate || null,
-      registrar,
-      ...registrant,
-    };
-  } catch {
-    return null;
-  }
-}
 
 function formatDomainAge(registrationDate: string): string {
   try {
@@ -339,7 +149,7 @@ function isIpAddress(hostname: string): boolean {
   return ipv4.test(hostname) || hostname.includes(':') && ipv6.test(hostname);
 }
 
-function getRegistrableDomain(hostname: string): string {
+export function getRegistrableDomain(hostname: string): string {
   const normalized = hostname.toLowerCase().replace(/\.$/, '');
   if (!normalized || isIpAddress(normalized)) return normalized;
 
@@ -367,14 +177,14 @@ interface HomographResult {
 
 function checkHomograph(hostname: string): HomographResult {
   const hasPunycode = hostname.includes('xn--');
-  const cyrillicPattern = /[\u0400-\u04FF]/;
+  const cyrillicPattern = /[\u0400-\u04FF]/u;
   const hasCyrillic = cyrillicPattern.test(hostname);
-  const zeroWidth = /[\u200B\u200C\u200D\uFEFF]/;
+  const zeroWidth = /\u200B|\u200C|\u200D|\uFEFF/u;
   const hasZeroWidth = zeroWidth.test(hostname);
 
   // Mixed script detection (Latin + non-Latin in same label)
   const latinPattern = /[a-zA-Z]/;
-  const nonLatinPattern = /[^\x00-\x7F]/;
+  const nonLatinPattern = /[^\p{ASCII}]/u;
   const hasMixedScript = latinPattern.test(hostname) && nonLatinPattern.test(hostname);
 
   return {
@@ -384,35 +194,6 @@ function checkHomograph(hostname: string): HomographResult {
     hasMixedScript,
     isHomograph: hasPunycode || hasCyrillic || hasZeroWidth || hasMixedScript,
   };
-}
-
-// ============================================
-// CHECK 5: Redirect Chain (follow redirects)
-// ============================================
-async function followRedirects(url: string): Promise<{ finalUrl: string; count: number }> {
-  try {
-    // Use fetch with redirect: 'follow' and check the response URL
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const res = await fetch(url, {
-      method: 'HEAD',
-      redirect: 'follow',
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    const finalUrl = res.url;
-    const redirected = res.redirected;
-
-    return {
-      finalUrl: finalUrl !== url ? finalUrl : url,
-      count: redirected ? 1 : 0, // Browser doesn't expose exact count
-    };
-  } catch {
-    return { finalUrl: url, count: 0 };
-  }
 }
 
 interface WhoisResult {
@@ -554,8 +335,6 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
       geoMismatch: { detected: false, severity: 'none', details: [] },
       homographAttack: false,
       hasPunycode: false,
-      finalUrl: null,
-      redirectCount: 0,
       safeBrowsingThreats: [],
       checksCompleted: [],
       checksFailed: ['url_parse'],
@@ -563,12 +342,10 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   }
 
   // Run checks in parallel for speed
-  const [dnsResult, rdapResult, homographResult, redirectResult, secretIntelResult] =
+  const [dnsResult, homographResult, secretIntelResult] =
     await Promise.allSettled([
       resolveDNS(hostname),
-      rdapLookup(registrableDomain),
       Promise.resolve(checkHomograph(hostname)),
-      followRedirects(normalizedUrl),
       fetchSecretIntel(normalizedUrl, registrableDomain),
     ]);
 
@@ -590,40 +367,13 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
     checksFailed.push('dns');
   }
 
-  // Process RDAP
-  let domainAge: string | null = null;
-  let registrationDate: string | null = null;
-  let registrar: string | null = null;
-
-  if (rdapResult.status === 'fulfilled' && rdapResult.value) {
-    registrationDate = rdapResult.value.registrationDate;
-    registrar = rdapResult.value.registrar;
-    if (registrationDate) {
-      domainAge = formatDomainAge(registrationDate);
-    }
-    checksCompleted.push('rdap');
-  } else {
-    checksFailed.push('rdap');
-  }
-
   // Process Homograph
   const homograph = homographResult.status === 'fulfilled' ? homographResult.value : null;
   if (homograph) {
     checksCompleted.push('homograph');
   }
 
-  // Process Redirects
-  let finalUrl: string | null = null;
-  let redirectCount = 0;
-  if (redirectResult.status === 'fulfilled') {
-    finalUrl = redirectResult.value.finalUrl;
-    redirectCount = redirectResult.value.count;
-    checksCompleted.push('redirect');
-  } else {
-    checksFailed.push('redirect');
-  }
-
-  // Process Safe Browsing
+  // Process Secret Intel (Safe Browsing + Whoxy WHOIS)
   let safeBrowsingThreats: string[] = [];
   let whois: WhoisResult | null = null;
   if (secretIntelResult.status === 'fulfilled' && secretIntelResult.value) {
@@ -634,7 +384,10 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
     checksFailed.push('safe_browsing');
   }
 
-  // Process Registrant: RDAP (primary) → Whoxy (fallback)
+  // Process Registrant from Whoxy WHOIS
+  let domainAge: string | null = null;
+  let registrationDate: string | null = null;
+  let registrar: string | null = null;
   let registrantName: string | null = null;
   let registrantOrg: string | null = null;
   let registrantStreet: string | null = null;
@@ -646,48 +399,24 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   let registrantTelephone: string | null = null;
   let privacyProtected = false;
 
-  // Try RDAP registrant data first (from registrar referral)
-  const rdap = rdapResult.status === 'fulfilled' ? rdapResult.value : null;
-  if (rdap && (rdap.registrantOrg || rdap.registrantName)) {
-    registrantName = rdap.registrantName;
-    registrantOrg = rdap.registrantOrg;
-    registrantStreet = rdap.registrantStreet;
-    registrantCity = rdap.registrantCity;
-    registrantState = rdap.registrantState;
-    registrantPostalCode = rdap.registrantPostalCode;
-    registrantCountry = rdap.registrantCountry;
-    registrantEmail = rdap.registrantEmail;
-    registrantTelephone = rdap.registrantTelephone;
-    privacyProtected = rdap.privacyProtected;
-    checksCompleted.push('whois'); // Mark as completed since we have registrant data
-  }
-
-  // Whoxy fallback: use if RDAP didn't return registrant data
   if (whois) {
-    if (!registrantOrg && !registrantName) {
-      // RDAP had no registrant data, use Whoxy
-      registrantName = whois.registrantName;
-      registrantOrg = whois.registrantOrg;
-      registrantStreet = whois.registrantStreet;
-      registrantCity = whois.registrantCity;
-      registrantState = whois.registrantState;
-      registrantPostalCode = whois.registrantPostalCode;
-      registrantCountry = whois.registrantCountry;
-      registrantEmail = whois.registrantEmail;
-      registrantTelephone = whois.registrantTelephone;
-      privacyProtected = whois.privacyProtected;
-      if (!checksCompleted.includes('whois')) checksCompleted.push('whois');
-    }
-    // Use Whoxy registrar as fallback if RDAP didn't get it
-    if (!registrar && whois.registrarName) {
-      registrar = whois.registrarName;
-    }
-    // Use Whoxy created date as fallback if RDAP didn't get it
-    if (!registrationDate && whois.whoisCreatedDate) {
+    registrantName = whois.registrantName;
+    registrantOrg = whois.registrantOrg;
+    registrantStreet = whois.registrantStreet;
+    registrantCity = whois.registrantCity;
+    registrantState = whois.registrantState;
+    registrantPostalCode = whois.registrantPostalCode;
+    registrantCountry = whois.registrantCountry;
+    registrantEmail = whois.registrantEmail;
+    registrantTelephone = whois.registrantTelephone;
+    privacyProtected = whois.privacyProtected;
+    if (whois.registrarName) registrar = whois.registrarName;
+    if (whois.whoisCreatedDate) {
       registrationDate = whois.whoisCreatedDate;
       domainAge = formatDomainAge(whois.whoisCreatedDate);
     }
-  } else if (!checksCompleted.includes('whois')) {
+    checksCompleted.push('whois');
+  } else {
     checksFailed.push('whois');
   }
 
@@ -723,8 +452,6 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
     geoMismatch,
     homographAttack: homograph?.isHomograph || false,
     hasPunycode: homograph?.hasPunycode || false,
-    finalUrl,
-    redirectCount,
     safeBrowsingThreats,
     checksCompleted,
     checksFailed,

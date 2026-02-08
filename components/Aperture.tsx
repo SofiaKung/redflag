@@ -4,11 +4,10 @@ import { motion } from 'framer-motion';
 
 interface ApertureProps {
   isAnalyzing: boolean;
-  riskColor?: string;
   score?: number;
 }
 
-const Aperture: React.FC<ApertureProps> = ({ isAnalyzing, riskColor = "text-blue-500", score }) => {
+const Aperture: React.FC<ApertureProps> = ({ isAnalyzing, score }) => {
   const radius = 90;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = score !== undefined ? circumference - (score / 100) * circumference : circumference;

@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ScanLine,
@@ -14,11 +14,12 @@ import {
 import { AppState, RiskLevel, AnalysisResult } from './types';
 import { analyzeFraudContent, checkPhishingFromScreenshot, verifyUrlString } from './services/geminiService';
 import Aperture from './components/Aperture';
-import QrScanner from './components/QrScanner';
-import EvidenceModal from './components/EvidenceModal';
-import ScanResultPage from './components/ScanResultPage';
-import LinkResultPage from './components/LinkResultPage';
 import ThreatStoryAndFeedback from './components/ThreatStoryAndFeedback';
+
+const QrScanner = lazy(() => import('./components/QrScanner'));
+const EvidenceModal = lazy(() => import('./components/EvidenceModal'));
+const ScanResultPage = lazy(() => import('./components/ScanResultPage'));
+const LinkResultPage = lazy(() => import('./components/LinkResultPage'));
 
 const normalizeLanguageName = (language?: string): string => {
   if (!language) return '';
@@ -170,18 +171,30 @@ const App: React.FC = () => {
     ? !areLanguagesEquivalent(result.detectedNativeLanguage, result.userSystemLanguage)
     : false;
   const genericInfrastructureClues = activeContent ? activeContent.redFlags.slice(0, 3) : [];
+  const lazyFallback = (
+    <div className="w-full py-10 text-center">
+      <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-[0.2em]">
+        Loading module...
+      </span>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden grid-pattern flex flex-col font-sans">
       {/* Fixed Header */}
       <header className="fixed top-0 left-0 right-0 z-[60] px-6 py-5 flex justify-between items-center bg-white/80 backdrop-blur-xl border-b border-neutral-100">
-        <div className="flex items-center gap-2.5">
+        <button
+          type="button"
+          onClick={reset}
+          className="flex items-center gap-2.5 hover:opacity-85 transition-opacity"
+          aria-label="Go to home page"
+        >
           <div className="relative">
             <div className="w-3 h-3 bg-red-600 rounded-full" />
             <motion.div animate={{ opacity: [0.2, 0.6, 0.2], scale: [1, 1.5, 1] }} transition={{ duration: 2, repeat: Infinity }} className="absolute inset-0 w-3 h-3 bg-red-600 rounded-full" />
           </div>
           <span className="font-black tracking-tighter text-xl text-slate-900 uppercase">REDFLAG</span>
-        </div>
+        </button>
         <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100/60 rounded-full border border-neutral-200/50">
           <MapPin size={10} className="text-neutral-500" />
           <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest tabular-nums">
@@ -192,30 +205,38 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 pt-24 pb-12">
         <AnimatePresence mode="wait">
-          {isScanningQr && <QrScanner onScan={(url) => runAnalysis({ url, source: 'qr' })} onClose={() => setIsScanningQr(false)} />}
+          {isScanningQr && (
+            <Suspense fallback={lazyFallback}>
+              <QrScanner onScan={(url) => runAnalysis({ url, source: 'qr' })} onClose={() => setIsScanningQr(false)} />
+            </Suspense>
+          )}
           
           {modalMode === 'screenshot' && (
-            <EvidenceModal
-              title="Analyze Screenshots"
-              description="Upload up to 10 screenshots of chats, emails, or messages. Our AI will analyze the sequence for complex fraud patterns."
-              icon={<Search size={24} />}
-              maxFiles={10}
-              onConfirm={(images) => runAnalysis({ imagesBase64: images, source: 'screenshot' })}
-              onClose={() => setModalMode(null)}
-              isLoading={state === AppState.ANALYZING}
-            />
+            <Suspense fallback={lazyFallback}>
+              <EvidenceModal
+                title="Analyze Screenshots"
+                description="Upload up to 10 screenshots of chats, emails, or messages. Our AI will analyze the sequence for complex fraud patterns."
+                icon={<Search size={24} />}
+                maxFiles={10}
+                onConfirm={(images) => runAnalysis({ imagesBase64: images, source: 'screenshot' })}
+                onClose={() => setModalMode(null)}
+                isLoading={state === AppState.ANALYZING}
+              />
+            </Suspense>
           )}
 
           {modalMode === 'link' && (
-            <EvidenceModal
-              title="Forensic Link Check"
-              description="Upload a screenshot of the suspicious URL. We will perform a technical intercept and risk analysis."
-              icon={<LinkIcon size={24} />}
-              maxFiles={1}
-              onConfirm={(images) => runAnalysis({ imagesBase64: images, forensic: true, source: 'link' })}
-              onClose={() => setModalMode(null)}
-              isLoading={state === AppState.ANALYZING}
-            />
+            <Suspense fallback={lazyFallback}>
+              <EvidenceModal
+                title="Forensic Link Check"
+                description="Upload a screenshot of the suspicious URL. We will perform a technical intercept and risk analysis."
+                icon={<LinkIcon size={24} />}
+                maxFiles={1}
+                onConfirm={(images) => runAnalysis({ imagesBase64: images, forensic: true, source: 'link' })}
+                onClose={() => setModalMode(null)}
+                isLoading={state === AppState.ANALYZING}
+              />
+            </Suspense>
           )}
 
           {/* IDLE STATE UI */}
@@ -322,27 +343,31 @@ const App: React.FC = () => {
 
           {/* RESULT VIEW — QR Scan */}
           {state === AppState.RESULT && result && activeContent && analysisSource === 'qr' && !isScanningQr && !modalMode && (
-            <ScanResultPage
-              result={result}
-              scannedUrl={scannedUrl}
-              activeContent={activeContent}
-              onReset={reset}
-              viewMode={viewMode}
-              onToggleLanguage={() => setViewMode(viewMode === 'native' ? 'translated' : 'native')}
-              isDifferentLang={isDifferentLang}
-            />
+            <Suspense fallback={lazyFallback}>
+              <ScanResultPage
+                result={result}
+                scannedUrl={scannedUrl}
+                activeContent={activeContent}
+                onReset={reset}
+                viewMode={viewMode}
+                onToggleLanguage={() => setViewMode(viewMode === 'native' ? 'translated' : 'native')}
+                isDifferentLang={isDifferentLang}
+              />
+            </Suspense>
           )}
 
           {/* RESULT VIEW — Verify Link */}
           {state === AppState.RESULT && result && activeContent && analysisSource === 'link' && !isScanningQr && !modalMode && (
-            <LinkResultPage
-              result={result}
-              activeContent={activeContent}
-              onReset={reset}
-              viewMode={viewMode}
-              onToggleLanguage={() => setViewMode(viewMode === 'native' ? 'translated' : 'native')}
-              isDifferentLang={isDifferentLang}
-            />
+            <Suspense fallback={lazyFallback}>
+              <LinkResultPage
+                result={result}
+                activeContent={activeContent}
+                onReset={reset}
+                viewMode={viewMode}
+                onToggleLanguage={() => setViewMode(viewMode === 'native' ? 'translated' : 'native')}
+                isDifferentLang={isDifferentLang}
+              />
+            </Suspense>
           )}
 
           {/* RESULT VIEW — Generic (Screenshot) */}

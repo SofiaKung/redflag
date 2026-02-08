@@ -65,7 +65,11 @@ const normalizePreviewError = (status: number, body: string): string => {
   return 'Preview unavailable';
 };
 
-const requestPreviewOnce = async (normalizedUrl: string): Promise<{ ok: true; base64: string } | { ok: false; status: number; error: string; retryAfterMs: number }> => {
+type PreviewAttemptResult =
+  | { ok: true; base64: string }
+  | { ok: false; status: number; error: string; retryAfterMs: number };
+
+const requestPreviewOnce = async (normalizedUrl: string): Promise<PreviewAttemptResult> => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
 
@@ -133,14 +137,16 @@ const fetchPreviewWithRetry = async (normalizedUrl: string): Promise<LinkPreview
       return { imageBase64: attemptResult.base64, error: null };
     }
 
-    const shouldRetry = attemptResult.status === 429 && attempt < maxAttempts;
-    if (shouldRetry) {
-      const backoffMs = attemptResult.retryAfterMs > 0 ? attemptResult.retryAfterMs : 1500;
-      await sleep(Math.min(backoffMs, 5000));
-      continue;
-    }
+    if ('status' in attemptResult) {
+      const shouldRetry = attemptResult.status === 429 && attempt < maxAttempts;
+      if (shouldRetry) {
+        const backoffMs = attemptResult.retryAfterMs > 0 ? attemptResult.retryAfterMs : 1500;
+        await sleep(Math.min(backoffMs, 5000));
+        continue;
+      }
 
-    return { imageBase64: null, error: attemptResult.error };
+      return { imageBase64: null, error: attemptResult.error };
+    }
   }
 
   return { imageBase64: null, error: 'Preview unavailable' };

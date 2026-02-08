@@ -31,18 +31,16 @@ export interface LinkMetadata {
 
   // Real verified data from actual API lookups
   verified?: {
-    domainAge: string | null;          // From RDAP
-    registrationDate: string | null;   // ISO date from RDAP
-    registrar: string | null;          // From RDAP
-    serverCountry: string | null;      // From GeoIP (ip-api.com)
+    domainAge: string | null;          // From Whoxy WHOIS
+    registrationDate: string | null;   // ISO date from Whoxy
+    registrar: string | null;          // From Whoxy
+    serverCountry: string | null;      // From GeoIP (ipwho.is)
     serverCity: string | null;         // From GeoIP
     isp: string | null;               // From GeoIP
     resolvedIp: string | null;         // From DNS (dns.google)
     homographAttack: boolean;          // Punycode/Cyrillic detection
     safeBrowsingThreats: string[];     // From Google Safe Browsing
-    finalUrl: string | null;           // After following redirects
-    redirectCount: number;
-    // Registrant (RDAP primary, Whoxy fallback)
+    // Registrant (from Whoxy WHOIS)
     registrantName: string | null;
     registrantOrg: string | null;
     registrantStreet: string | null;

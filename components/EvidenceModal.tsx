@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldAlert, Globe, Loader2, Upload, FileImage, Trash2, Plus } from 'lucide-react';
+import { X, ShieldAlert, Globe, Loader2, Upload, Trash2, Plus } from 'lucide-react';
 
 interface EvidenceModalProps {
   onConfirm: (imagesBase64: string[]) => void;
@@ -27,7 +27,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const files: File[] = e.target.files ? Array.from(e.target.files) : [];
     if (files.length === 0) return;
 
     const remainingSlots = maxFiles - images.length;
