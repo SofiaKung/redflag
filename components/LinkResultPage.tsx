@@ -379,7 +379,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                     <Mail size={12} />
                     <span className="text-[9px] uppercase font-black tracking-wider">Contact Email</span>
                   </div>
-                  <p className={`text-[11px] font-bold break-all leading-snug ${
+                  <p className={`text-sm font-bold break-all leading-snug ${
                     verified?.registrantEmail?.includes('withheldforprivacy') || verified?.registrantEmail?.includes('whoisguard')
                       ? 'text-amber-600' : 'text-slate-800'
                   }`}>
