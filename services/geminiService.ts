@@ -56,7 +56,7 @@ export const analyzeFraudContent = async (
     REQUIRED FIELDS FOR BOTH VERSIONS:
     - headline: A short verdict.
     - explanation: A detailed reason for the risk score.
-    - action: Specific security advice.
+    - action: Specific security advice. ALWAYS tell users to access the service only via the original official app or by manually typing the official domain. Never suggest the link is safe.
     - hook: What initially attracts the victim.
     - trap: The actual malicious mechanism or technical threat.
     - redFlags: An array of specific signals (e.g., bad grammar, suspicious domain, urgency).
@@ -197,8 +197,11 @@ const analyzeUrlForensic = async (
     - Classify fraud type (Phishing, Smishing, Brand Impersonation, etc.)
     - Generate headline, explanation, action, hook, trap, and redFlags
     - IMPORTANT: Incorporate the REAL technical data AND WHOIS intelligence findings into your explanation and redFlags. Mention specific WHOIS details (registrant, country, privacy status) when relevant.
-    - Generate in both Native (English technical) and Translated (${userLanguage}) versions
-    - If device language matches native language, Translated version must be in English
+    - In the action field, NEVER suggest the link is safe to visit. ALWAYS recommend users access the service by manually typing the official website URL or using the official app. Do not classify the link as any type (safe, legitimate, etc.) — just direct users to the official source.
+    - Detect the likely Native Language from the visible page/screenshot text and context.
+    - Generate in both Native (detected language) and Translated (${userLanguage}) versions.
+    - Use broad language names when possible (example: use "English" instead of "British English" or "American English").
+    - If device language matches native language (including regional variants), Translated version must be in English.
 
     Return JSON ONLY.
   `;
@@ -367,7 +370,7 @@ const getFallbackResult = (userLanguage: string): AnalysisResult => {
   const englishFallback = {
     headline: "CRITICAL THREAT",
     explanation: "Suspicious pattern detected in content structure.",
-    action: "Do not interact. Report immediately.",
+    action: "Do not interact. If unsure, access the service only through the official app or by typing the official site manually.",
     hook: "Psychological trigger detected.",
     trap: "Deceptive mechanism found.",
     redFlags: ["Unverified sender", "Urgency trigger"]

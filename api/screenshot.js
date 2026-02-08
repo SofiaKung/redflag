@@ -6,6 +6,7 @@ import {
 } from '../server/requestGuards.js';
 
 const BROWSERLESS_BASE_URL = 'https://production-sfo.browserless.io/screenshot';
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function parseJsonBody(body) {
   if (!body) return null;
@@ -80,15 +81,43 @@ export default async function handler(req, res) {
 
   try {
     const forwardedPayload = { ...payload, url: urlValidation.normalizedUrl || targetUrl };
-    const upstream = await fetch(`${BROWSERLESS_BASE_URL}?token=${encodeURIComponent(token)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(forwardedPayload),
-    });
+    const maxAttempts = 2;
+    let upstream = null;
+    let lastStatus = 0;
+    let retryAfterSec = 0;
 
-    if (!upstream.ok) {
-      const text = await upstream.text();
-      res.status(upstream.status).json({ error: text || 'Screenshot capture failed' });
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      upstream = await fetch(`${BROWSERLESS_BASE_URL}?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(forwardedPayload),
+      });
+
+      if (upstream.ok) break;
+
+      lastStatus = upstream.status;
+      const retryHeader = upstream.headers.get('Retry-After');
+      retryAfterSec = retryHeader ? Number.parseInt(retryHeader, 10) : 0;
+      await upstream.text(); // consume body
+
+      const shouldRetry = lastStatus === 429 && attempt < maxAttempts;
+      if (shouldRetry) {
+        const backoffMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0
+          ? retryAfterSec * 1000
+          : 1500;
+        await sleep(Math.min(backoffMs, 5000));
+        continue;
+      }
+      break;
+    }
+
+    if (!upstream || !upstream.ok) {
+      if (lastStatus === 429) {
+        if (retryAfterSec > 0) res.setHeader('Retry-After', String(retryAfterSec));
+        res.status(429).json({ error: 'Preview rate-limited by screenshot provider. Please retry shortly.' });
+        return;
+      }
+      res.status(lastStatus || 502).json({ error: 'Screenshot capture failed' });
       return;
     }
 

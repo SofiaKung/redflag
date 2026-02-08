@@ -318,6 +318,42 @@ function formatDomainAge(registrationDate: string): string {
   }
 }
 
+const COMMON_MULTI_PART_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'net.uk', 'sch.uk', 'me.uk',
+  'com.au', 'net.au', 'org.au', 'edu.au', 'gov.au', 'asn.au', 'id.au',
+  'co.jp', 'ne.jp', 'or.jp', 'go.jp', 'ac.jp', 'ed.jp', 'lg.jp',
+  'com.sg', 'net.sg', 'org.sg', 'gov.sg', 'edu.sg', 'per.sg',
+  'com.my', 'net.my', 'org.my', 'gov.my', 'edu.my',
+  'co.id', 'ac.id', 'or.id', 'go.id',
+  'co.in', 'firm.in', 'net.in', 'org.in', 'gen.in', 'ind.in',
+  'com.br', 'net.br', 'org.br',
+  'co.nz', 'org.nz', 'net.nz', 'govt.nz',
+  'co.za', 'org.za', 'net.za',
+  'com.mx', 'org.mx', 'gob.mx',
+  'com.tr', 'net.tr', 'org.tr',
+]);
+
+function isIpAddress(hostname: string): boolean {
+  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+  const ipv6 = /^[0-9a-f:]+$/i;
+  return ipv4.test(hostname) || hostname.includes(':') && ipv6.test(hostname);
+}
+
+function getRegistrableDomain(hostname: string): string {
+  const normalized = hostname.toLowerCase().replace(/\.$/, '');
+  if (!normalized || isIpAddress(normalized)) return normalized;
+
+  const labels = normalized.split('.').filter(Boolean);
+  if (labels.length <= 2) return normalized;
+
+  const lastTwo = labels.slice(-2).join('.');
+  if (COMMON_MULTI_PART_SUFFIXES.has(lastTwo) && labels.length >= 3) {
+    return labels.slice(-3).join('.');
+  }
+
+  return lastTwo;
+}
+
 // ============================================
 // CHECK 4: Homograph / Punycode Detection
 // ============================================
@@ -489,10 +525,13 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   const checksCompleted: string[] = [];
   const checksFailed: string[] = [];
 
+  const normalizedUrl = url.startsWith('http') ? url : `https://${url}`;
   let hostname: string;
+  let registrableDomain: string;
   try {
-    const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+    const parsed = new URL(normalizedUrl);
     hostname = parsed.hostname;
+    registrableDomain = getRegistrableDomain(hostname);
   } catch {
     return {
       resolvedIp: null,
@@ -527,10 +566,10 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
   const [dnsResult, rdapResult, homographResult, redirectResult, secretIntelResult] =
     await Promise.allSettled([
       resolveDNS(hostname),
-      rdapLookup(hostname),
+      rdapLookup(registrableDomain),
       Promise.resolve(checkHomograph(hostname)),
-      followRedirects(url.startsWith('http') ? url : `https://${url}`),
-      fetchSecretIntel(url.startsWith('http') ? url : `https://${url}`, hostname),
+      followRedirects(normalizedUrl),
+      fetchSecretIntel(normalizedUrl, registrableDomain),
     ]);
 
   // Process DNS + GeoIP
@@ -658,7 +697,7 @@ export async function runLinkIntelligence(url: string): Promise<RealLinkIntellig
     serverCountry,
     registrantCountry,
     registrantEmail,
-    hostname,
+    registrableDomain,
     privacyProtected,
     domainAge,
   );

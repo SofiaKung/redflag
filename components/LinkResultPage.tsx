@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ShieldAlert,
   Shield,
@@ -8,14 +8,10 @@ import {
   Clock,
   Server,
   AlertTriangle,
-  Ban,
   RefreshCw,
   ExternalLink,
-  Flag,
   Fingerprint,
   CircleAlert,
-  Anchor,
-  Zap,
   MapPin,
   Building2,
   ShieldOff,
@@ -24,6 +20,7 @@ import {
 } from 'lucide-react';
 import { RiskLevel, AnalysisResult, LocalizedAnalysis } from '../types';
 import Aperture from './Aperture';
+import ThreatStoryAndFeedback from './ThreatStoryAndFeedback';
 
 interface LinkResultPageProps {
   result: AnalysisResult;
@@ -140,16 +137,6 @@ const getMetaSeverity = (field: string, value: string | number): string => {
   return 'text-slate-700';
 };
 
-// --- Detail Card ---
-const DetailCard: React.FC<{ title: string; content: string; icon: React.ReactNode }> = ({ title, content, icon }) => (
-  <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
-    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2 flex items-center gap-2">
-      {icon} {title}
-    </h4>
-    <p className="text-sm font-bold text-slate-800 leading-snug">{content}</p>
-  </div>
-);
-
 // =============================================
 // MAIN COMPONENT
 // =============================================
@@ -165,11 +152,23 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
     activeContent.explanation,
     10
   );
-  const [showReportModal, setShowReportModal] = useState(false);
 
   const meta = result.linkMetadata;
   const verified = meta?.verified;
   const analyzedUrl = meta?.analyzedUrl || '';
+  const infrastructureClues = [
+    meta?.suspiciousTld ? `Suspicious TLD: ${meta.suspiciousTld}` : '',
+    meta?.impersonating && meta.impersonating !== 'None detected'
+      ? `Impersonating: ${meta.impersonating}`
+      : '',
+    verified?.safeBrowsingThreats && verified.safeBrowsingThreats.length > 0
+      ? `Safe Browsing flagged: ${verified.safeBrowsingThreats.join(', ')}`
+      : '',
+    verified?.homographAttack ? 'Homograph attack indicators detected' : '',
+    verified?.geoMismatch && verified.geoMismatchDetails.length > 0 ? verified.geoMismatchDetails[0] : '',
+    verified?.redirectCount && verified.redirectCount > 0 ? `Redirect chain: ${verified.redirectCount} hop` : '',
+    ...activeContent.redFlags,
+  ].filter(Boolean).slice(0, 3) as string[];
 
   useEffect(() => {
     triggerHaptic(result.riskLevel);
@@ -518,152 +517,35 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             </div>
           )}
 
-          <DetailCard title="The Hook" content={activeContent.hook} icon={<Anchor size={14} className="text-blue-500" />} />
-          <DetailCard title="Technical Trap" content={activeContent.trap} icon={<Zap size={14} className="text-amber-500" />} />
-
-          {/* Technical Signals */}
-          <div className="bg-neutral-50/40 border border-neutral-100 rounded-3xl p-6">
-            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-4 flex items-center gap-2">
-              <ShieldAlert size={12} /> Technical Signals
-            </h4>
-            <div className="space-y-2">
-              {activeContent.redFlags.map((flag, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 1.0 + i * 0.1 }}
-                  className="flex items-start gap-3 bg-white px-4 py-3 rounded-2xl border border-neutral-100/50 text-sm font-bold text-slate-700 shadow-sm"
-                >
-                  <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                    result.riskLevel === RiskLevel.SAFE ? 'bg-emerald-500' : 'bg-red-500'
-                  }`} />
-                  <span className="leading-snug">{flag}</span>
-                </motion.div>
-              ))}
-            </div>
-          </div>
+          <ThreatStoryAndFeedback
+            hook={activeContent.hook}
+            trap={activeContent.trap}
+            infrastructureClues={infrastructureClues}
+            category={result.category}
+          />
         </div>
       </motion.div>
 
       {/* ===== STICKY FOOTER ===== */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-neutral-100 z-50">
-        {result.riskLevel === RiskLevel.DANGER ? (
-          <>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowReportModal(true)}
-              className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-2xl shadow-red-500/30 text-sm flex items-center justify-center gap-2 transition-all"
-            >
-              <Ban size={16} />
-              Block & Report
-            </motion.button>
-            <button
-              onClick={onReset}
-              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-            >
-              <RefreshCw size={12} /> START ANOTHER SCAN
-            </button>
-          </>
-        ) : result.riskLevel === RiskLevel.CAUTION ? (
-          <>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setShowReportModal(true)}
-              className="w-full py-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-2xl shadow-2xl shadow-amber-500/30 text-sm flex items-center justify-center gap-2 transition-all"
-            >
-              <Flag size={16} />
-              Report Suspicious
-            </motion.button>
-            <button
-              onClick={onReset}
-              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-            >
-              <RefreshCw size={12} /> START ANOTHER SCAN
-            </button>
-          </>
-        ) : (
-          <>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                if (analyzedUrl) window.open(analyzedUrl, '_blank', 'noopener,noreferrer');
-              }}
-              className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-slate-900 hover:bg-slate-800 shadow-2xl shadow-slate-500/20 flex items-center justify-center gap-2 transition-all"
-            >
-              <ExternalLink size={16} />
-              Open Link
-            </motion.button>
-            <button
-              onClick={onReset}
-              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-            >
-              <RefreshCw size={12} /> START ANOTHER SCAN
-            </button>
-          </>
-        )}
+        <div
+          className={`w-full py-5 px-6 rounded-2xl text-center font-bold text-sm ${
+            result.riskLevel === RiskLevel.DANGER
+              ? 'bg-red-50 text-red-800 border border-red-200'
+              : result.riskLevel === RiskLevel.CAUTION
+                ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+          }`}
+        >
+          {activeContent.action}
+        </div>
+        <button
+          onClick={onReset}
+          className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+        >
+          <RefreshCw size={12} /> START ANOTHER SCAN
+        </button>
       </div>
-
-      {/* ===== REPORT CONFIRMATION MODAL ===== */}
-      <AnimatePresence>
-        {showReportModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end justify-center"
-            onClick={() => setShowReportModal(false)}
-          >
-            <motion.div
-              initial={{ y: 100 }}
-              animate={{ y: 0 }}
-              exit={{ y: 100 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-t-3xl p-8 pb-10"
-            >
-              <div className="w-10 h-1 bg-neutral-200 rounded-full mx-auto mb-6" />
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <Flag className="w-5 h-5 text-red-500" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-lg">Report this link?</h3>
-                  <p className="text-xs text-neutral-500 font-medium">
-                    Help protect others from this threat
-                  </p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed mb-6">
-                This will report the URL to security databases (Google Safe Browsing, PhishTank) and
-                local cybersecurity authorities. Your report helps protect others from similar threats.
-              </p>
-              {analyzedUrl && (
-                <div className="bg-neutral-50 rounded-xl p-3 mb-6 border border-neutral-100">
-                  <p className="font-mono text-xs text-neutral-600 break-all">{analyzedUrl}</p>
-                </div>
-              )}
-              <button
-                onClick={() => {
-                  setShowReportModal(false);
-                  triggerHaptic(RiskLevel.SAFE);
-                  alert(
-                    'Report submitted successfully. Thank you for helping keep the internet safe.'
-                  );
-                }}
-                className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 transition-all mb-3 shadow-lg shadow-red-500/20"
-              >
-                Confirm Report
-              </button>
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="w-full py-4 rounded-2xl font-bold text-sm text-neutral-600 bg-neutral-100 hover:bg-neutral-200 transition-all"
-              >
-                Cancel
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };

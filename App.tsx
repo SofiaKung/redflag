@@ -7,8 +7,6 @@ import {
   Link as LinkIcon,
   RefreshCw,
   Globe,
-  Zap,
-  Anchor,
   ShieldAlert,
   ChevronRight,
   MapPin
@@ -20,6 +18,42 @@ import QrScanner from './components/QrScanner';
 import EvidenceModal from './components/EvidenceModal';
 import ScanResultPage from './components/ScanResultPage';
 import LinkResultPage from './components/LinkResultPage';
+import ThreatStoryAndFeedback from './components/ThreatStoryAndFeedback';
+
+const normalizeLanguageName = (language?: string): string => {
+  if (!language) return '';
+
+  const cleaned = language
+    .toLowerCase()
+    .replace(/\(.*?\)/g, ' ')
+    .replace(/[_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return '';
+
+  const aliasMap: Record<string, string> = {
+    'british english': 'english',
+    'uk english': 'english',
+    'english united kingdom': 'english',
+    'american english': 'english',
+    'us english': 'english',
+    'english united states': 'english',
+    'en gb': 'english',
+    'en us': 'english',
+  };
+
+  if (aliasMap[cleaned]) return aliasMap[cleaned];
+  if (cleaned.includes('english')) return 'english';
+  return cleaned;
+};
+
+const areLanguagesEquivalent = (left?: string, right?: string): boolean => {
+  const normalizedLeft = normalizeLanguageName(left);
+  const normalizedRight = normalizeLanguageName(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  return normalizedLeft === normalizedRight;
+};
 
 const App: React.FC = () => {
   const [state, setState] = useState<AppState>(AppState.IDLE);
@@ -132,7 +166,10 @@ const App: React.FC = () => {
   };
 
   const activeContent = result ? (viewMode === 'translated' ? result.translated : result.native) : null;
-  const isDifferentLang = result ? !result.detectedNativeLanguage.toLowerCase().includes(result.userSystemLanguage.toLowerCase()) : false;
+  const isDifferentLang = result
+    ? !areLanguagesEquivalent(result.detectedNativeLanguage, result.userSystemLanguage)
+    : false;
+  const genericInfrastructureClues = activeContent ? activeContent.redFlags.slice(0, 3) : [];
 
   return (
     <div className="min-h-screen bg-white relative overflow-hidden grid-pattern flex flex-col font-sans">
@@ -341,22 +378,12 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid gap-3">
-                  <DetailCard title="The Hook" content={activeContent.hook} icon={<Anchor size={14} className="text-blue-500" />} />
-                  <DetailCard title="Technical Trap" content={activeContent.trap} icon={<Zap size={14} className="text-amber-500" />} />
-
-                  <div className="bg-neutral-50/40 border border-neutral-100 rounded-3xl p-6">
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-4 flex items-center gap-2">
-                      <ShieldAlert size={12} /> Technical Signals
-                    </h4>
-                    <div className="space-y-2">
-                      {activeContent.redFlags.map((flag, i) => (
-                        <div key={i} className="flex items-start gap-3 bg-white px-4 py-3 rounded-2xl border border-neutral-100/50 text-sm font-bold text-slate-700 shadow-sm">
-                          <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
-                          <span className="leading-snug">{flag}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <ThreatStoryAndFeedback
+                    hook={activeContent.hook}
+                    trap={activeContent.trap}
+                    infrastructureClues={genericInfrastructureClues}
+                    category={result.category}
+                  />
                 </div>
               </motion.div>
 
@@ -380,14 +407,5 @@ const App: React.FC = () => {
     </div>
   );
 };
-
-const DetailCard: React.FC<{ title: string; content: string; icon: React.ReactNode }> = ({ title, content, icon }) => (
-  <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
-    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-2 flex items-center gap-2">
-      {icon} {title}
-    </h4>
-    <p className="text-sm font-bold text-slate-800 leading-snug">{content}</p>
-  </div>
-);
 
 export default App;
