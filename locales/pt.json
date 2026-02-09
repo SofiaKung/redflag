@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "Envie uma captura de tela de uma URL suspeita para verificar phishing ou malware.",
   "home.submissionsLogged": "Os envios são registrados para ajudar a detectar e prevenir golpes.",
   "error.analysisFailed": "Análise Falhou",
+  "error.analysisFailedDetail": "A análise falhou. Verifique sua conexão e tente novamente.",
   "analyzing.extractingData": "EXTRAINDO DADOS...",
   "analyzing.extractingPixels": "EXTRAINDO PIXELS...",
   "analyzing.identifyingBrand": "IDENTIFICANDO MARCA...",

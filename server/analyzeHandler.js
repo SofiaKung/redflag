@@ -13,11 +13,39 @@ import { getRegistrableDomain, formatDomainAge } from './tools/rdapLookup.js';
 import { runGeminiGenerate } from './geminiProxy.js';
 import { logError } from './supabase.js';
 
+// ---- Language Helpers ----
+
+/** Convert ISO 639-1 / BCP 47 code to English name for prompt readability. */
+function langName(code) {
+  if (!code) return 'English';
+  try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; }
+  catch { return code; }
+}
+
+/** Safety net: normalise a value to an ISO-ish code if Gemini returns a full name. */
+function normalizeToIsoCode(val) {
+  if (!val || typeof val !== 'string') return 'en';
+  const trimmed = val.trim();
+  // Already looks like an ISO/BCP 47 code (e.g. "en", "zh-TW")
+  if (/^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(trimmed)) return trimmed;
+  // Fallback map for common full names Gemini might still return
+  const nameToCode = {
+    english: 'en', chinese: 'zh', mandarin: 'zh', thai: 'th',
+    vietnamese: 'vi', spanish: 'es', portuguese: 'pt',
+    indonesian: 'id', malay: 'ms', japanese: 'ja', korean: 'ko',
+    french: 'fr', german: 'de', arabic: 'ar', hindi: 'hi',
+    russian: 'ru', italian: 'it', 'simplified chinese': 'zh-CN',
+    'traditional chinese': 'zh-TW', 'mandarin chinese': 'zh',
+  };
+  return nameToCode[trimmed.toLowerCase()] || trimmed.toLowerCase().slice(0, 2);
+}
+
 // ---- System Prompt ----
 
 function buildSystemPrompt(userLanguage, userCountryCode) {
+  const userLangName = langName(userLanguage);
   const locationContext = userCountryCode
-    ? `\nUSER CONTEXT:\n- Device language: "${userLanguage}"\n- User location: "${userCountryCode}" (use this for local context — reference local emergency numbers, local brands, and regional scam patterns relevant to this country)\n`
+    ? `\nUSER CONTEXT:\n- Device language: ${userLangName} (${userLanguage})\n- User location: "${userCountryCode}" (use this for local context — reference local emergency numbers, local brands, and regional scam patterns relevant to this country)\n`
     : '';
 
   return `You are "RedFlag," a high-precision forensic cybersecurity AI that detects scams, phishing, and fraud.
@@ -46,8 +74,8 @@ ANALYSIS REQUIREMENTS:
 3. Detect the native language of the content being analyzed.
 4. Generate TWO localized versions of your analysis:
    - "native": In the detected native language of the content
-   - "translated": In the user's device language ("${userLanguage}")
-   - If native language matches device language (including regional variants), "translated" must be in English.
+   - "translated": In the user's device language, ${userLangName} (${userLanguage})
+   - If the native language matches the device language (including regional variants like zh-TW vs zh-CN), "translated" must be in English.
 
 REQUIRED FIELDS FOR EACH LOCALIZED VERSION:
 - headline: Short verdict (2-5 words)
@@ -69,12 +97,13 @@ Include a "linkMetadata" object with:
 
 OUTPUT FORMAT:
 CRITICAL: Your final response MUST be a raw JSON object — no prose, no explanation, no markdown, no code fences. Start with { and end with }. Do NOT write any text before or after the JSON.
+IMPORTANT: "detectedNativeLanguage" and "userSystemLanguage" MUST be BCP 47 / ISO 639-1 language codes (e.g. "en", "th", "zh", "zh-TW", "vi", "es", "pt", "id"). Do NOT use full language names.
 Return this exact structure:
 {
   "riskLevel": "SAFE" | "CAUTION" | "DANGER",
   "score": <number 0-100>,
   "category": "<fraud category string>",
-  "detectedNativeLanguage": "<language name>",
+  "detectedNativeLanguage": "<BCP 47 language code, e.g. 'en', 'th', 'zh', 'zh-TW', 'vi'>",
   "userSystemLanguage": "${userLanguage}",
   "native": { "headline", "explanation", "action", "hook", "trap", "redFlags": [] },
   "translated": { "headline", "explanation", "action", "hook", "trap", "redFlags": [] },
@@ -299,6 +328,10 @@ async function runAgentic({ url, text, imagesBase64, userLanguage, userCountryCo
     result.riskLevel = result.score >= 70 ? 'DANGER' : result.score >= 30 ? 'CAUTION' : 'SAFE';
   }
 
+  // Normalise language fields to ISO codes (safety net if Gemini returns full names)
+  result.detectedNativeLanguage = normalizeToIsoCode(result.detectedNativeLanguage);
+  result.userSystemLanguage = normalizeToIsoCode(result.userSystemLanguage);
+
   // Attach server-side verified data
   const verified = buildVerifiedFromToolResults(toolResults);
   if (verified && result.linkMetadata) {
@@ -476,6 +509,10 @@ async function runLegacy({ url, text, imagesBase64, userLanguage, userCountryCod
       }
     }
   }
+
+  // Normalise language fields to ISO codes (safety net if Gemini returns full names)
+  result.detectedNativeLanguage = normalizeToIsoCode(result.detectedNativeLanguage);
+  result.userSystemLanguage = normalizeToIsoCode(result.userSystemLanguage);
 
   return result;
 }

@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "上傳可疑網址的截圖，檢查是否為釣魚網站或惡意軟體。",
   "home.submissionsLogged": "提交的資料將被記錄，以協助偵測及防範詐騙。",
   "error.analysisFailed": "分析失敗",
+  "error.analysisFailedDetail": "分析失敗，請檢查網路連線後重試。",
   "analyzing.extractingData": "正在擷取資料...",
   "analyzing.extractingPixels": "正在擷取像素...",
   "analyzing.identifyingBrand": "正在識別品牌...",

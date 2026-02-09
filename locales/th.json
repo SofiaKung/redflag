@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "อัปโหลดภาพหน้าจอของ URL ที่น่าสงสัยเพื่อตรวจสอบฟิชชิงหรือมัลแวร์",
   "home.submissionsLogged": "ข้อมูลที่ส่งเข้ามาจะถูกบันทึกเพื่อช่วยตรวจจับและป้องกันการหลอกลวง",
   "error.analysisFailed": "การวิเคราะห์ล้มเหลว",
+  "error.analysisFailedDetail": "การวิเคราะห์ล้มเหลว กรุณาตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง",
   "analyzing.extractingData": "กำลังดึงข้อมูล...",
   "analyzing.extractingPixels": "กำลังดึงพิกเซล...",
   "analyzing.identifyingBrand": "กำลังระบุแบรนด์...",

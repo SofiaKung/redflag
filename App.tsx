@@ -12,7 +12,7 @@ import {
 import { AppState, RiskLevel, AnalysisResult } from './types';
 import { analyzeContent } from './services/geminiService';
 import { useI18n } from './i18n/I18nContext';
-import { SUPPORTED_LOCALES } from './i18n/locales';
+import { SUPPORTED_LOCALES, languageDisplayName } from './i18n/locales';
 import Aperture from './components/Aperture';
 import ThreatStoryAndFeedback from './components/ThreatStoryAndFeedback';
 import LanguagePicker from './components/LanguagePicker';
@@ -22,69 +22,10 @@ const EvidenceModal = lazy(() => import('./components/EvidenceModal'));
 const ScanResultPage = lazy(() => import('./components/ScanResultPage'));
 const LinkResultPage = lazy(() => import('./components/LinkResultPage'));
 
-const normalizeLanguageName = (language?: string): string => {
-  if (!language) return '';
-
-  let cleaned = language
-    .toLowerCase()
-    .replace(/\(.*?\)/g, ' ')
-    .replace(/[_-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (!cleaned) return '';
-
-  // Strip language qualifiers so "Traditional Chinese" matches "Chinese", etc.
-  const qualifiers = ['traditional', 'simplified', 'brazilian', 'european', 'latin american', 'modern', 'classical', 'standard'];
-  for (const q of qualifiers) {
-    cleaned = cleaned.replace(new RegExp(`\\b${q}\\b`, 'g'), '').trim().replace(/\s+/g, ' ');
-  }
-
-  const aliasMap: Record<string, string> = {
-    'british english': 'english',
-    'uk english': 'english',
-    'english united kingdom': 'english',
-    'american english': 'english',
-    'us english': 'english',
-    'english united states': 'english',
-    'en gb': 'english',
-    'en us': 'english',
-    // Chinese variants Gemini may return
-    'mandarin': 'chinese',
-    'mandarin chinese': 'chinese',
-    'cantonese': 'chinese',
-    '\u4e2d\u6587': 'chinese',           // 中文
-    '\u7b80\u4f53\u4e2d\u6587': 'chinese', // 简体中文
-    '\u7e41\u9ad4\u4e2d\u6587': 'chinese', // 繁體中文
-    // Thai
-    '\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22': 'thai',   // ภาษาไทย
-    '\u0e44\u0e17\u0e22': 'thai',                             // ไทย
-    // Vietnamese
-    'ti\u1ebfng vi\u1ec7t': 'vietnamese', // Tiếng Việt
-    // Indonesian / Malay
-    'bahasa indonesia': 'indonesian',
-    'bahasa melayu': 'malay',
-    'malay': 'malay',
-    // Portuguese
-    'portugu\u00eas': 'portuguese',       // Português
-    // Spanish
-    'espa\u00f1ol': 'spanish',            // Español
-    'castellano': 'spanish',
-  };
-
-  if (aliasMap[cleaned]) return aliasMap[cleaned];
-  if (cleaned.includes('english')) return 'english';
-  if (cleaned.includes('chinese') || cleaned.includes('\u4e2d\u6587')) return 'chinese';
-  return cleaned;
-};
-
-const areLanguagesEquivalent = (left?: string, right?: string): boolean => {
-  const normalizedLeft = normalizeLanguageName(left);
-  const normalizedRight = normalizeLanguageName(right);
-  if (!normalizedLeft || !normalizedRight) return false;
-  return normalizedLeft === normalizedRight
-    || normalizedLeft.includes(normalizedRight)
-    || normalizedRight.includes(normalizedLeft);
+/** Compare two BCP 47 / ISO 639-1 codes by their base language. */
+const sameBaseLanguage = (a?: string, b?: string): boolean => {
+  if (!a || !b) return false;
+  return a.split('-')[0].toLowerCase() === b.split('-')[0].toLowerCase();
 };
 
 const App: React.FC = () => {
@@ -137,15 +78,8 @@ const App: React.FC = () => {
     detectCountry();
   }, []);
 
-  const getReadableLanguage = () => {
-    try {
-      // Use the i18n locale so Gemini analysis follows the user's chosen UI language
-      const langCode = locale.split('-')[0];
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(langCode) || 'English';
-    } catch {
-      return 'English';
-    }
-  };
+  // Return the full BCP 47 locale code — Gemini respects regional variants (e.g. zh-TW → Taiwanese vocab)
+  const getLanguageCode = () => locale;
 
   useEffect(() => {
     if (state === AppState.ANALYZING) {
@@ -170,7 +104,7 @@ const App: React.FC = () => {
     if (inputData.url) setScannedUrl(inputData.url);
 
     try {
-      const userLanguage = getReadableLanguage();
+      const userLanguage = getLanguageCode();
 
       const analysis = await analyzeContent({
         url: inputData.url,
@@ -182,22 +116,13 @@ const App: React.FC = () => {
       });
 
       setResult(analysis);
-      // Default to the version that's in the user's chosen language
-      const userLanguageForMode = getReadableLanguage();
-      const langMatch = areLanguagesEquivalent(analysis.detectedNativeLanguage, userLanguageForMode);
-      console.log('[viewMode] detectedNativeLanguage:', JSON.stringify(analysis.detectedNativeLanguage),
-        '| userLanguageForMode:', JSON.stringify(userLanguageForMode),
-        '| userSystemLanguage:', JSON.stringify(analysis.userSystemLanguage),
-        '| match:', langMatch);
-      if (langMatch) {
-        setViewMode('native');
-      } else {
-        setViewMode('translated');
-      }
+      // Default to the version in the user's chosen language.
+      // Compare base ISO codes (e.g. "zh-TW" and "zh" both → "zh").
+      setViewMode(sameBaseLanguage(analysis.detectedNativeLanguage, analysis.userSystemLanguage) ? 'native' : 'translated');
       setState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);
-      setError(err?.message || 'Analysis failed. Check your API key and network connection.');
+      setError(err?.message || t('error.analysisFailedDetail'));
       setState(AppState.IDLE);
     }
   };
@@ -215,7 +140,7 @@ const App: React.FC = () => {
 
   const activeContent = result ? (viewMode === 'translated' ? result.translated : result.native) : null;
   const isDifferentLang = result
-    ? !areLanguagesEquivalent(result.detectedNativeLanguage, result.userSystemLanguage)
+    ? !sameBaseLanguage(result.detectedNativeLanguage, result.userSystemLanguage)
     : false;
   const genericInfrastructureClues = activeContent ? activeContent.redFlags.slice(0, 3) : [];
   const lazyFallback = (
@@ -434,7 +359,7 @@ const App: React.FC = () => {
                     >
                       <Globe size={14} className="text-blue-600" />
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-                        {t('result.showIn', { language: viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage })}
+                        {t('result.showIn', { language: languageDisplayName(viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage, locale) })}
                       </span>
                     </button>
                   )}

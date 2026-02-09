@@ -406,7 +406,7 @@ export const checkPhishingFromScreenshot = async (
 };
 
 const getFallbackResult = (userLanguage: string): AnalysisResult => {
-  const normalizedLanguage = userLanguage?.trim() || "English";
+  const langCode = userLanguage?.trim() || "en";
   const englishFallback = {
     headline: "CRITICAL THREAT",
     explanation: "Suspicious pattern detected in content structure.",
@@ -416,19 +416,19 @@ const getFallbackResult = (userLanguage: string): AnalysisResult => {
     redFlags: ["Unverified sender", "Urgency trigger"]
   };
 
-  const translatedFallback = normalizedLanguage.toLowerCase().includes("english")
+  const translatedFallback = langCode.split('-')[0] === 'en'
     ? englishFallback
     : {
         ...englishFallback,
-        explanation: `${englishFallback.explanation} Auto-translation to ${normalizedLanguage} is temporarily unavailable.`
+        explanation: `${englishFallback.explanation} Auto-translation is temporarily unavailable.`
       };
 
   return {
     riskLevel: RiskLevel.DANGER,
     score: 98,
     category: "Undetermined Fraud",
-    detectedNativeLanguage: "English",
-    userSystemLanguage: normalizedLanguage,
+    detectedNativeLanguage: "en",
+    userSystemLanguage: langCode,
     native: englishFallback,
     translated: translatedFallback
   };

@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "上传可疑 URL 的截图，检查是否存在网络钓鱼或恶意软件。",
   "home.submissionsLogged": "提交记录将被保存，以帮助检测和防范骗局。",
   "error.analysisFailed": "分析失败",
+  "error.analysisFailedDetail": "分析失败，请检查网络连接后重试。",
   "analyzing.extractingData": "正在提取数据...",
   "analyzing.extractingPixels": "正在提取像素...",
   "analyzing.identifyingBrand": "正在识别品牌...",

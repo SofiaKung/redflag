@@ -25,6 +25,17 @@ export const SUPPORTED_LOCALES: { code: LocaleCode; nativeName: string }[] = [
   { code: 'id', nativeName: 'Bahasa Indonesia' },
 ];
 
+/** Convert an ISO 639-1 / BCP 47 code to a human-readable name. */
+export function languageDisplayName(code: string, displayLocale: string = 'en'): string {
+  if (!code) return '';
+  try {
+    return new Intl.DisplayNames([displayLocale], { type: 'language' }).of(code) || code;
+  } catch {
+    try { return new Intl.DisplayNames(['en'], { type: 'language' }).of(code) || code; }
+    catch { return code; }
+  }
+}
+
 /** Map browser language codes to our locale codes */
 export function resolveLocaleCode(browserLang: string): LocaleCode | null {
   const lower = browserLang.toLowerCase();

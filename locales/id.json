@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "Unggah tangkapan layar URL mencurigakan untuk memeriksa phishing atau malware.",
   "home.submissionsLogged": "Pengiriman dicatat untuk membantu mendeteksi dan mencegah penipuan.",
   "error.analysisFailed": "Analisis Gagal",
+  "error.analysisFailedDetail": "Analisis gagal. Periksa koneksi Anda dan coba lagi.",
   "analyzing.extractingData": "MENGEKSTRAK DATA...",
   "analyzing.extractingPixels": "MENGEKSTRAK PIKSEL...",
   "analyzing.identifyingBrand": "MENGIDENTIFIKASI MEREK...",

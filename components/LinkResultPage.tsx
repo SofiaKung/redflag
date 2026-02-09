@@ -12,6 +12,7 @@ import Aperture from './Aperture';
 import ThreatStoryAndFeedback from './ThreatStoryAndFeedback';
 import DigitalFingerprint from './DigitalFingerprint';
 import { useI18n } from '../i18n/I18nContext';
+import { languageDisplayName } from '../i18n/locales';
 
 interface LinkResultPageProps {
   result: AnalysisResult;
@@ -124,7 +125,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
   onToggleLanguage,
   isDifferentLang,
 }) => {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { displayed: streamedExplanation, isDone: explanationDone } = useStreamingText(
     activeContent.explanation,
     10
@@ -170,7 +171,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             >
               <Globe size={14} className="text-blue-600" />
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-                {t('result.showIn', { language: viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage })}
+                {t('result.showIn', { language: languageDisplayName(viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage, locale) })}
               </span>
             </button>
           )}

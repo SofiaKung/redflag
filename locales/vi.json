@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "Tải lên ảnh chụp màn hình URL đáng ngờ để kiểm tra lừa đảo hoặc mã độc.",
   "home.submissionsLogged": "Các lượt gửi được ghi lại để hỗ trợ phát hiện và ngăn chặn lừa đảo.",
   "error.analysisFailed": "Phân tích thất bại",
+  "error.analysisFailedDetail": "Phân tích thất bại. Vui lòng kiểm tra kết nối và thử lại.",
   "analyzing.extractingData": "ĐANG TRÍCH XUẤT DỮ LIỆU...",
   "analyzing.extractingPixels": "ĐANG TRÍCH XUẤT ĐIỂM ẢNH...",
   "analyzing.identifyingBrand": "ĐANG NHẬN DẠNG THƯƠNG HIỆU...",

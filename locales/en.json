@@ -10,6 +10,7 @@
   "home.submissionsLogged": "Submissions are logged to help detect and prevent scams.",
 
   "error.analysisFailed": "Analysis Failed",
+  "error.analysisFailedDetail": "Analysis failed. Please check your connection and try again.",
 
   "analyzing.extractingData": "EXTRACTING DATA...",
   "analyzing.extractingPixels": "EXTRACTING PIXELS...",

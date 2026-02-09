@@ -9,6 +9,7 @@
   "home.verifyLinkDesc": "Sube una captura de pantalla de una URL sospechosa para detectar phishing o malware.",
   "home.submissionsLogged": "Los envíos se registran para ayudar a detectar y prevenir estafas.",
   "error.analysisFailed": "Análisis fallido",
+  "error.analysisFailedDetail": "El análisis falló. Verifica tu conexión e intenta de nuevo.",
   "analyzing.extractingData": "EXTRAYENDO DATOS...",
   "analyzing.extractingPixels": "EXTRAYENDO PÍXELES...",
   "analyzing.identifyingBrand": "IDENTIFICANDO MARCA...",

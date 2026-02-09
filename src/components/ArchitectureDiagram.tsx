@@ -14,16 +14,16 @@ const phases = [
       {
         id: "app_router",
         type: "trigger",
-        label: "App.tsx — 3-Way Router",
+        label: "App.tsx — State Machine + 3-Way Router",
         detail:
-          "Routes based on input type:\n• URL → verifyUrlString()\n• Screenshot → checkPhishingFromScreenshot()\n• Text → analyzeFraudContent()\n\nAll three delegate to analyzeContent() via backward-compat aliases.",
+          "State: IDLE → ANALYZING → RESULT\n\nRoutes based on input type:\n• QR scan → extract URL → runAnalysis({ url, source: 'qr' })\n• Screenshot → runAnalysis({ imagesBase64, source: 'screenshot' })\n• Link → runAnalysis({ imagesBase64, source: 'link' })\n\nDetects userRegion via ipwho.is on mount.\ni18n via useI18n() hook (8 locales, localStorage).",
       },
       {
         id: "gemini_service",
         type: "action",
         label: "geminiService.ts — POST /api/analyze",
         detail:
-          "Single analyzeContent() function.\nSends { url?, text?, imagesBase64?, userLanguage } to backend.\nHandles errors with getFallbackResult().",
+          "analyzeContent({ url?, text?, imagesBase64?, userLanguage, userCountryCode })\n→ POST /api/analyze\n→ Returns AnalysisResult\n\nAlso exports:\n• submitFeedback(analysisId, 'correct' | 'incorrect')\n→ POST /api/feedback",
       },
     ],
     issues: [],
@@ -41,14 +41,14 @@ const phases = [
         type: "trigger",
         label: "api/analyze.js — Serverless Entry",
         detail:
-          "• Origin check (isRequestOriginAllowed)\n• Rate limiting (routeKey: 'analyze')\n• Payload validation (url | text | imagesBase64)\n• userLanguage required\n• 25MB body limit for base64 images",
+          "• Origin check (isRequestOriginAllowed)\n• Rate limiting (routeKey: 'analyze')\n• Payload validation (url | text | imagesBase64)\n• userLanguage + userCountryCode accepted\n• 25MB body limit for base64 images\n• source field: 'qr' | 'link' | 'screenshot'",
       },
       {
         id: "analyze_handler",
         type: "logic",
         label: "analyzeHandler.js — Dual Mode Router",
         detail:
-          "Checks env.USE_AGENTIC_API:\n• 'true' → runAgentic() — Interactions API\n• 'false' → runLegacy() — generateContent\n\nIf agentic fails, auto-fallback to legacy.",
+          "Checks env.USE_AGENTIC_API:\n• 'true' → runAgentic() — Interactions API\n• 'false' → runLegacy() — generateContent\n\nBoth paths share:\n• buildSystemPrompt(userLanguage, userCountryCode)\n• Same response schema (native + translated)\n• Same buildVerifiedFromToolResults()\n\nFire-and-forget: logAnalysis() → Supabase on success.\nlogError() → Supabase on failure.",
       },
     ],
     issues: [],
@@ -66,7 +66,7 @@ const phases = [
         type: "logic",
         label: "Build System Prompt + Input",
         detail:
-          "buildSystemPrompt(userLanguage):\n• RedFlag persona & capabilities\n• Tool usage guidelines\n• WHOIS intelligence analysis rules\n• Output JSON schema specification\n\nbuildInputParts():\n• URL → 'Analyze this URL...'\n• Text → 'Analyze this content...'\n• Images → inline base64 parts",
+          "buildSystemPrompt(userLanguage, userCountryCode):\n• RedFlag persona & capabilities\n• USER CONTEXT: device language + country code\n• Tool usage guidelines (4 tools)\n• WHOIS intelligence analysis rules\n• Bilingual output: 'native' + 'translated'\n  - native = detected content language\n  - translated = user device language (or English if same)\n• Required fields: headline, explanation, action, hook, trap, redFlags\n• linkMetadata for URLs\n• scamCountryCode (ISO 3166-1 alpha-2)\n\nbuildInputParts():\n• URL → 'Analyze this URL...'\n• Text → 'Analyze this content...'\n• Images → inline base64 parts",
       },
       {
         id: "interactions_api_t0",
@@ -103,21 +103,21 @@ const phases = [
         type: "action",
         label: "rdap_lookup — RDAP + Whoxy Fallback",
         detail:
-          "1. IANA bootstrap → data.iana.org/rdap/dns.json\n2. Registry RDAP query\n3. Registrar referral (follow links)\n4. vCard parsing → registrant details\n5. Privacy proxy detection\n6. Whoxy fallback if RDAP fails\n\nReturns: { registrationDate, domainAge, registrar,\n  registrantOrg, registrantEmail, ... }",
+          "1. IANA bootstrap → data.iana.org/rdap/dns.json (cached)\n2. Registry RDAP query by TLD\n3. Registrar referral (follow links)\n4. vCard parsing → registrant details\n5. Privacy proxy detection (keyword matching)\n6. Whoxy fallback if RDAP fails ($2/1k)\n\nReturns: { registrationDate, domainAge, registrar,\n  registrantOrg, registrantEmail, registrantTelephone,\n  registrantCountry, privacyProtected, source }",
       },
       {
         id: "safe_browsing",
         type: "action",
         label: "safe_browsing — Google Safe Browsing v4",
         detail:
-          "POST safebrowsing.googleapis.com/v4/threatMatches:find\nChecks: MALWARE, SOCIAL_ENGINEERING,\n  UNWANTED_SOFTWARE, THREAT_TYPE_UNSPECIFIED\n\nReturns: { threats: [...], clean: bool, success: bool }",
+          "POST safebrowsing.googleapis.com/v4/threatMatches:find\nChecks: MALWARE, SOCIAL_ENGINEERING,\n  UNWANTED_SOFTWARE, POTENTIALLY_HARMFUL_APPLICATION\n\nReturns: { threats: [...], clean: bool, success: bool }",
       },
       {
         id: "check_homograph",
         type: "action",
         label: "check_homograph — Homograph Detection",
         detail:
-          "Pure JavaScript checks:\n• Punycode (xn-- prefix)\n• Cyrillic characters\n• Zero-width characters\n• Mixed-script detection\n\nReturns: { isHomograph, hasPunycode, details }",
+          "Pure JavaScript checks:\n• Punycode (xn-- prefix)\n• Cyrillic lookalike characters\n• Zero-width invisible characters\n• Mixed-script detection\n\nReturns: { isHomograph, hasPunycode, details }",
       },
     ],
     issues: [
@@ -174,24 +174,105 @@ const phases = [
         type: "logic",
         label: "Parse & Validate JSON",
         detail:
-          "1. Strip markdown code fences if present\n2. JSON.parse the response text\n3. Ensure score is a number (fallback: 0)\n4. Ensure riskLevel exists (derive from score)",
+          "1. Strip markdown code fences if present\n2. Find JSON object in text if needed\n3. JSON.parse the response\n4. Ensure score is a number (fallback: 0)\n5. Ensure riskLevel exists (derive from score)\n6. Validate: native, translated, scamCountryCode present",
       },
       {
         id: "verified_data",
         type: "data",
         label: "Build Verified Data (Server-Side)",
         detail:
-          "buildVerifiedFromToolResults():\n• Aggregates real data from all 4 tools\n• Computes checksCompleted / checksFailed\n• Detects geo-mismatch (server vs registrant country)\n• Detects new domain + privacy = high risk\n\nAttached as linkMetadata.verified — NOT from model output.",
+          "buildVerifiedFromToolResults():\n• Aggregates real data from all 4 tools\n• Computes checksCompleted / checksFailed\n• Detects geo-mismatch (server vs registrant country)\n• Detects new domain + privacy = high risk\n• Escalates severity when multiple signals combine\n\nAttached as linkMetadata.verified — NOT from model output.",
+      },
+      {
+        id: "supabase_log",
+        type: "action",
+        label: "Supabase Logging (Fire-and-Forget)",
+        detail:
+          "logAnalysis() writes to 'analyses' table:\n• input_type, analyzed_url, risk_level, risk_score\n• fraud_category, scam_language, user_device_language\n• api_mode, response_time_ms\n• registrar, domain_age, server_country\n• homograph_attack, safe_browsing_threats\n• registrant_org, registrant_country, privacy_protected\n• geo_mismatch, user_country_code\n\nNon-blocking: .catch(() => {}) — never delays response.",
       },
       {
         id: "client_response",
         type: "action",
         label: "Return AnalysisResult to Client",
         detail:
-          "Full response includes:\n• riskLevel, score, category\n• native + translated analysis\n• linkMetadata with verified server-side data\n• checksCompleted for UI badges",
+          "Full response includes:\n• riskLevel, score, category\n• native + translated analysis (bilingual)\n• detectedNativeLanguage, userSystemLanguage\n• linkMetadata with verified server-side data\n• scamCountryCode (ISO alpha-2)\n• analysisId, apiMode, responseTimeMs",
       },
     ],
     issues: [],
+  },
+  {
+    id: "client_render",
+    label: "Phase 7",
+    title: "Client Rendering",
+    trigger: "AnalysisResult received → setState(RESULT)",
+    color: "#3B82F6",
+    accent: "#DBEAFE",
+    nodes: [
+      {
+        id: "result_router",
+        type: "logic",
+        label: "Result Page Router",
+        detail:
+          "Based on analysisSource:\n• 'qr' → <ScanResultPage />\n  - Safe Link Preview (sandboxed screenshot)\n  - Scanned URL card\n  - Redirect Chain Alert\n  - Impersonation Alert\n• 'link' → <LinkResultPage />\n  - URL Autopsy (protocol/domain/TLD breakdown)\n  - Impersonation Diff\n• 'screenshot' → inline result view\n\nAll include Aperture score + language toggle.",
+      },
+      {
+        id: "digital_fingerprint",
+        type: "data",
+        label: "DigitalFingerprint — Shared Component",
+        detail:
+          "2×3 grid (used by both ScanResultPage & LinkResultPage):\n• Domain Age | Registrar\n• Hosted In | Registrant\n• Contact Email | Contact Phone\n\nPlus:\n• AI Estimate legend (amber ⚠ badge)\n• WHOIS Privacy Protected badge\n• Safe Browsing / Homograph indicators\n• Redirect indicator (count + final URL)\n• Geo-Mismatch Alert (high/medium/low severity)\n\nAll labels i18n-aware via useI18n() hook.",
+      },
+      {
+        id: "threat_story",
+        type: "action",
+        label: "ThreatStoryAndFeedback",
+        detail:
+          "Displays:\n• Hook: What attracts the victim\n• Trap: The malicious mechanism\n• Infrastructure clues (top 3)\n\nFeedback buttons:\n• Correct / Incorrect → submitFeedback()\n→ POST /api/feedback → Supabase",
+      },
+    ],
+    issues: [
+      {
+        severity: "note",
+        text: "Components lazy-loaded: QrScanner, EvidenceModal, ScanResultPage, LinkResultPage.",
+      },
+    ],
+  },
+  {
+    id: "i18n_system",
+    label: "i18n",
+    title: "Internationalization System",
+    trigger: "React Context-based, 8 locales",
+    color: "#0EA5E9",
+    accent: "#E0F2FE",
+    nodes: [
+      {
+        id: "i18n_provider",
+        type: "logic",
+        label: "I18nContext.tsx — Provider + Hook",
+        detail:
+          "Provides: { locale, setLocale, t }\n\nDetection flow:\n1. Check localStorage for user's previous choice\n2. Auto-detect from navigator.language\n3. Fallback to English\n\nt(key, params?) → lookup from locales[locale]\nParams: { tld: '.xyz' } → interpolated into template",
+      },
+      {
+        id: "locales",
+        type: "data",
+        label: "8 Locale Files (100+ keys)",
+        detail:
+          "locales/:\n• en.json — English\n• th.json — ไทย\n• vi.json — Tiếng Việt\n• zh-CN.json — 简体中文\n• zh-TW.json — 繁體中文\n• pt.json — Português\n• es.json — Español\n• id.json — Bahasa Indonesia\n\nKey namespaces: home.*, analyzing.*, result.*,\nfingerprint.*, scan.*, link.*, lang.*",
+      },
+      {
+        id: "language_picker",
+        type: "action",
+        label: "LanguagePicker.tsx — Locale Selector",
+        detail:
+          "Modal UI for switching locale.\nPersists choice to localStorage.\nAccessible from App header.",
+      },
+    ],
+    issues: [
+      {
+        severity: "note",
+        text: "UI locale (i18n) is separate from analysis language. Gemini produces native + translated output based on content language + device language.",
+      },
+    ],
   },
   {
     id: "legacy_fallback",
@@ -206,20 +287,24 @@ const phases = [
         type: "action",
         label: "Parallel Tool Execution (Direct)",
         detail:
-          "If URL provided:\n• Extract hostname + registrable domain\n• Promise.allSettled([dns, rdap, sb, homograph])\n• Build intel summary string for prompt",
+          "If URL provided:\n• Extract hostname + registrable domain\n• Promise.allSettled([dns, rdap, sb, homograph])\n• Build intel summary string for prompt\n  (REAL TECHNICAL INTELLIGENCE block)",
       },
       {
         id: "legacy_generate",
         type: "ai",
         label: "generateContent (Single Call)",
         detail:
-          "POST /v1beta/models/{model}:generateContent\n• System prompt + user content + tool data in one call\n• Uses responseSchema for structured output\n• No multi-turn — one shot\n\nSame verified data attachment afterwards.",
+          "POST /v1beta/models/{model}:generateContent\n• Same buildSystemPrompt() (language-aware)\n• System prompt + user content + tool data in one call\n• Uses responseMimeType + responseSchema\n• Same bilingual output (native + translated)\n• No multi-turn — one shot\n\nSame buildVerifiedFromToolResults() afterwards.",
       },
     ],
     issues: [
       {
         severity: "note",
-        text: "Legacy path still works independently. Agentic auto-falls back here on any error.",
+        text: "Fully language-aware: same prompt, same schema, same bilingual output as agentic path.",
+      },
+      {
+        severity: "note",
+        text: "Limitation: cannot discover embedded URLs in text/screenshots (no multi-turn tool calling).",
       },
     ],
   },
@@ -427,12 +512,13 @@ function PhaseCard({
 // ---- Data Flow Summary ----
 
 const flowSteps = [
-  { label: "Client", color: "#3B82F6" },
+  { label: "Client (i18n)", color: "#3B82F6" },
   { label: "/api/analyze", color: "#10B981" },
   { label: "Interactions API", color: "#8B5CF6" },
   { label: "4 Tools (parallel)", color: "#F59E0B" },
   { label: "Interactions API", color: "#8B5CF6" },
   { label: "Verified Data", color: "#10B981" },
+  { label: "Supabase Log", color: "#0EA5E9" },
   { label: "AnalysisResult", color: "#3B82F6" },
 ];
 
@@ -619,10 +705,10 @@ function FraudDetectionLogic() {
               }}
             >
               {[
-                { step: "1", label: "Receive Input", desc: "URL, text, or screenshot arrives", color: "#3B82F6" },
+                { step: "1", label: "Receive Input", desc: "URL, text, or screenshot arrives with user language + country context", color: "#3B82F6" },
                 { step: "2", label: "Decide Tools", desc: "Gemini picks which tools to call based on input type", color: "#8B5CF6" },
                 { step: "3", label: "Analyze Results", desc: "Cross-references all tool outputs for fraud patterns", color: "#F59E0B" },
-                { step: "4", label: "Score & Classify", desc: "Assigns risk score, category, and generates bilingual report", color: "#EF4444" },
+                { step: "4", label: "Score & Classify", desc: "Assigns risk score, category, and generates bilingual report (native + translated)", color: "#EF4444" },
               ].map((s) => (
                 <div
                   key={s.step}
@@ -682,6 +768,11 @@ function FraudDetectionLogic() {
                 <strong>Multi-turn capability:</strong> If the first tool results reveal
                 something unexpected, Gemini can request additional investigation (up to 5
                 turns).
+              </li>
+              <li>
+                <strong>Bilingual output:</strong> Produces analysis in both the content's
+                native language and the user's device language. If they match, translated
+                version is in English.
               </li>
             </ul>
           </div>
@@ -898,20 +989,28 @@ function FraudDetectionLogic() {
               }}
             >
 {`AnalysisResult {
-  riskLevel   → SAFE | CAUTION | DANGER
-  score       → 0-100 (Gemini assigns, server validates type)
-  category    → "Phishing", "Brand Impersonation", "Job Scam"...
-  native      → { headline, explanation, action, hook, trap, redFlags[] }
-  translated  → Same structure in user's device language
-  linkMetadata → {
+  riskLevel       → SAFE | CAUTION | DANGER
+  score           → 0-100 (Gemini assigns, server validates type)
+  category        → "Phishing", "Brand Impersonation", "Job Scam"...
+  detectedNativeLanguage → "Thai", "Vietnamese", "English"...
+  userSystemLanguage     → User's device language
+  native          → { headline, explanation, action, hook, trap, redFlags[] }
+  translated      → Same structure in user's device language
+  scamCountryCode → ISO 3166-1 alpha-2 (e.g. "TW", "TH", "US")
+  linkMetadata    → {
     analyzedUrl, impersonating, actualDomain, domainAge,
     serverLocation, blacklistCount, suspiciousTld,
     verified: {   ← SERVER-SIDE (not from model)
-      domainAge, registrar, registrantOrg, serverCountry,
+      domainAge, registrar, registrantOrg, registrantEmail,
+      registrantTelephone, registrantCountry, serverCountry,
       safeBrowsingThreats[], homographAttack, privacyProtected,
-      geoMismatch, geoMismatchSeverity, checksCompleted[]
+      geoMismatch, geoMismatchSeverity, geoMismatchDetails[],
+      redirectCount, finalUrl, checksCompleted[], checksFailed[]
     }
   }
+  analysisId      → UUID (for feedback tracking)
+  apiMode         → "agentic" | "legacy"
+  responseTimeMs  → Execution time
 }`}
             </div>
 
@@ -934,9 +1033,9 @@ function FraudDetectionLogic() {
               >
                 verified
               </code>{" "}
-              from raw tool results — ensuring data shown in the UI (domain age,
-              registrar, server location) comes from actual API responses, not model
-              hallucination.
+              from raw tool results — ensuring data shown in the Digital Fingerprint
+              grid (domain age, registrar, server location, registrant) comes from actual
+              API responses, not model hallucination.
             </div>
           </div>
         )}
@@ -965,10 +1064,10 @@ export default function ArchitectureDiagram() {
       {/* Title */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>
-          RedFlag — Gemini Interactions API Architecture
+          RedFlag — Architecture Overview
         </h1>
         <p style={{ fontSize: 13, color: "#6B7280", margin: "4px 0 0" }}>
-          Agentic loop with dual-mode fallback. Click any node for details.
+          Agentic Gemini Interactions API + i18n (8 locales) + Supabase logging. Click any node for details.
         </p>
       </div>
 
@@ -1078,21 +1177,38 @@ export default function ArchitectureDiagram() {
               <strong>Why dual mode with fallback?</strong>
               <br />
               The Interactions API is in Beta. If it fails (rate limits, API changes),
-              the legacy generateContent path kicks in automatically. Both produce
-              identical AnalysisResult shapes.
+              the legacy generateContent path kicks in automatically. Both paths share
+              the same system prompt, response schema, and bilingual output — the
+              legacy path is fully language-aware.
             </p>
             <p>
               <strong>Why verified data is built server-side?</strong>
               <br />
               The model reasons about tool results, but the actual values in
               linkMetadata.verified come directly from tool execution output —
-              not from Gemini's JSON response. This ensures data fidelity.
+              not from Gemini's JSON response. This ensures the Digital Fingerprint
+              grid shows real data, not hallucinated values.
             </p>
             <p>
               <strong>Why no response_schema on Interactions API?</strong>
               <br />
               The Interactions API doesn't support response_mime_type or response_schema
               in generation_config. We rely on the system prompt + post-parse validation instead.
+            </p>
+            <p>
+              <strong>Why React Context for i18n (not a library)?</strong>
+              <br />
+              Simple, zero-dependency approach. 8 locale JSON files, localStorage
+              persistence, browser language auto-detection. The UI locale is separate
+              from the Gemini analysis language — Gemini produces bilingual output
+              (native + translated) independently of which locale the UI is set to.
+            </p>
+            <p>
+              <strong>Why Supabase fire-and-forget?</strong>
+              <br />
+              Analysis logging and user feedback are non-critical. logAnalysis() runs
+              with .catch(() =&gt; {"{}"}) so a Supabase outage never blocks or delays
+              the analysis response to the user.
             </p>
           </div>
         )}
@@ -1112,7 +1228,11 @@ export default function ArchitectureDiagram() {
       >
         <strong style={{ color: "#1F2937" }}>Files:</strong>{" "}
         server/agentLoop.js · server/analyzeHandler.js · server/tools/*.js ·
-        api/analyze.js · services/geminiService.ts · vite.config.ts
+        server/supabase.js · api/analyze.js · api/feedback.js ·
+        services/geminiService.ts · components/DigitalFingerprint.tsx ·
+        components/ScanResultPage.tsx · components/LinkResultPage.tsx ·
+        components/ThreatStoryAndFeedback.tsx · components/LanguagePicker.tsx ·
+        i18n/I18nContext.tsx · locales/*.json · types.ts · vite.config.ts
       </div>
     </div>
   );
