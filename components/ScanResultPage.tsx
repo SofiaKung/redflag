@@ -22,6 +22,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { RiskLevel, AnalysisResult, LocalizedAnalysis } from '../types';
+import { useI18n } from '../i18n/I18nContext';
 import Aperture from './Aperture';
 import ThreatStoryAndFeedback from './ThreatStoryAndFeedback';
 import { generateLinkPreview } from '../services/linkPreview';
@@ -132,6 +133,7 @@ const HighlightedUrl: React.FC<{ url: string; riskLevel: RiskLevel }> = ({ url, 
 
 // --- Safe Link Preview Component ---
 const SafeLinkPreview: React.FC<{ url: string; riskLevel: RiskLevel }> = ({ url, riskLevel }) => {
+  const { t } = useI18n();
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -162,11 +164,11 @@ const SafeLinkPreview: React.FC<{ url: string; riskLevel: RiskLevel }> = ({ url,
       <div className="flex items-center gap-2 mb-3">
         <Monitor size={12} className="text-neutral-400" />
         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400">
-          Safe Preview
+          {t('scan.safePreview')}
         </h4>
         {loading && (
           <span className="text-[9px] font-mono text-blue-500 animate-pulse tracking-wider">
-            RENDERING...
+            {t('scan.rendering')}
           </span>
         )}
       </div>
@@ -184,7 +186,7 @@ const SafeLinkPreview: React.FC<{ url: string; riskLevel: RiskLevel }> = ({ url,
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
                 <Monitor size={28} className="text-neutral-300" />
                 <span className="text-[10px] font-mono text-neutral-400 tracking-wider">
-                  Capturing site preview...
+                  {t('scan.capturingSitePreview')}
                 </span>
               </div>
             </div>
@@ -204,7 +206,7 @@ const SafeLinkPreview: React.FC<{ url: string; riskLevel: RiskLevel }> = ({ url,
         {!loading && !previewImage && (
           <div className="aspect-[390/500] flex flex-col items-center justify-center gap-2 text-neutral-400">
             <ImageOff size={28} />
-            <span className="text-xs font-medium">{previewError || 'Preview unavailable'}</span>
+            <span className="text-xs font-medium">{previewError || t('scan.previewUnavailable')}</span>
           </div>
         )}
 
@@ -212,7 +214,7 @@ const SafeLinkPreview: React.FC<{ url: string; riskLevel: RiskLevel }> = ({ url,
         <div className="absolute top-3 left-3 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full flex items-center gap-1.5">
           <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
           <span className="text-[9px] font-mono text-white/80 tracking-wider uppercase">
-            Sandboxed
+            {t('scan.sandboxed')}
           </span>
         </div>
       </div>
@@ -229,6 +231,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
   onToggleLanguage,
   isDifferentLang,
 }) => {
+  const { t } = useI18n();
   const { displayed: streamedExplanation, isDone: explanationDone } = useStreamingText(activeContent.explanation, 10);
   const [copied, setCopied] = useState(false);
 
@@ -281,7 +284,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             >
               <Globe size={14} className="text-blue-600" />
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-                Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
+                {t('result.showIn', { language: viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage })}
               </span>
             </button>
           )}
@@ -295,7 +298,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             {activeContent.headline}
           </h2>
           <p className="text-slate-600 text-xs font-mono uppercase tracking-[0.2em] font-bold">
-            Risk Context: {result.category}
+            {t('result.riskContext', { category: result.category })}
           </p>
           <div className="bg-slate-50/80 border border-slate-100 rounded-3xl p-6 backdrop-blur-sm">
             <p className="text-slate-700 text-sm font-bold leading-relaxed">
@@ -321,7 +324,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
           <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 flex items-center gap-2">
-                <LinkIcon size={12} /> Scanned URL
+                <LinkIcon size={12} /> {t('scan.scannedUrl')}
               </h4>
               <button
                 onClick={handleCopyUrl}
@@ -337,11 +340,8 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
               <div className="mt-3 flex items-start gap-2">
                 <div className="w-0.5 h-full min-h-[2rem] bg-gradient-to-b from-blue-500 to-transparent rounded-full shrink-0" />
                 <p className="text-[11px] text-blue-600 leading-snug">
-                  <span className="font-black">Note:</span> The use of{' '}
-                  <code className="bg-blue-100 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">
-                    {meta.suspiciousTld}
-                  </code>{' '}
-                  is a strong indicator of fraudulent activity.
+                  <span className="font-black">{t('scan.note')}</span>{' '}
+                  {t('scan.suspiciousTldNote', { tld: meta.suspiciousTld })}
                 </p>
               </div>
             )}
@@ -358,9 +358,9 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
           >
             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500 mb-3 flex items-center gap-2">
               <ExternalLink size={12} />
-              Redirect Chain Detected
+              {t('scan.redirectChain')}
               <span className="ml-auto text-[8px] font-mono px-2 py-0.5 rounded-full bg-amber-200 text-amber-700">
-                {verified.redirectCount} {verified.redirectCount === 1 ? 'HOP' : 'HOPS'}
+                {verified.redirectCount} {verified.redirectCount === 1 ? t('scan.hop') : t('scan.hops')}
               </span>
             </h4>
             <div className="space-y-2">
@@ -369,7 +369,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   <LinkIcon size={14} className="text-amber-600" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">QR Points To</p>
+                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">{t('scan.qrPointsTo')}</p>
                   <p className="text-xs font-bold font-mono text-amber-800 truncate">{scannedUrl}</p>
                 </div>
               </div>
@@ -381,7 +381,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   <AlertTriangle size={14} className="text-red-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Actually Goes To</p>
+                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">{t('scan.actuallyGoesTo')}</p>
                   <p className="text-xs font-bold font-mono text-red-600 truncate">{verified.finalUrl}</p>
                 </div>
               </div>
@@ -398,7 +398,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm"
           >
             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-3 flex items-center gap-2">
-              <Shield size={12} /> Impersonation Analysis
+              <Shield size={12} /> {t('scan.impersonationAnalysis')}
             </h4>
             <div className="space-y-2">
               <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-50 border border-neutral-100">
@@ -406,7 +406,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   <Shield size={14} className="text-blue-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Impersonating</p>
+                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">{t('scan.impersonating')}</p>
                   <p className="text-sm font-bold text-slate-900 truncate">{meta.impersonating}</p>
                 </div>
               </div>
@@ -415,7 +415,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   <AlertTriangle size={14} className="text-red-500" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">Actual Destination</p>
+                  <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">{t('scan.actualDestination')}</p>
                   <p className="text-sm font-bold text-red-600 font-mono truncate">{meta.actualDomain}</p>
                 </div>
               </div>
@@ -432,7 +432,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm"
           >
             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-3 flex items-center gap-2">
-              <Fingerprint size={12} /> Digital Fingerprint
+              <Fingerprint size={12} /> {t('fingerprint.title')}
             </h4>
             <div className="grid grid-cols-2 gap-3">
               {/* Domain Age */}
@@ -440,7 +440,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-neutral-400">
                     <Clock size={12} />
-                    <span className="text-[9px] uppercase font-black tracking-wider">Domain Age</span>
+                    <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.domainAge')}</span>
                   </div>
                   {!verified?.domainAge && (
                     <CircleAlert size={10} className="text-amber-400" />
@@ -461,7 +461,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-neutral-400">
                     <Server size={12} />
-                    <span className="text-[9px] uppercase font-black tracking-wider">Hosted In</span>
+                    <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.hostedIn')}</span>
                   </div>
                   {!verified?.serverCountry && (
                     <CircleAlert size={10} className="text-amber-400" />
@@ -484,7 +484,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-neutral-400">
                     <Building2 size={12} />
-                    <span className="text-[9px] uppercase font-black tracking-wider">Registrant</span>
+                    <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.registrant')}</span>
                   </div>
                   {!(verified && verified.checksCompleted.includes('whois')) && (
                     <CircleAlert size={10} className="text-amber-400" />
@@ -495,7 +495,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                 }`}>
                   {verified?.registrantOrg
                     || verified?.registrantName
-                    || (verified?.privacyProtected ? 'Privacy Hidden' : 'Unknown')}
+                    || (verified?.privacyProtected ? t('fingerprint.privacyHidden') : t('fingerprint.unknown'))}
                 </p>
               </div>
 
@@ -504,7 +504,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 text-neutral-400">
                     <MapPin size={12} />
-                    <span className="text-[9px] uppercase font-black tracking-wider">Owner Location</span>
+                    <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.ownerLocation')}</span>
                   </div>
                   {!(verified && verified.checksCompleted.includes('whois')) && (
                     <CircleAlert size={10} className="text-amber-400" />
@@ -514,11 +514,11 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   verified?.geoMismatch ? 'text-red-600' : 'text-slate-800'
                 }`}>
                   {[verified?.registrantCity, verified?.registrantState, verified?.registrantCountry]
-                    .filter(Boolean).join(', ') || 'Unknown'}
+                    .filter(Boolean).join(', ') || t('fingerprint.unknown')}
                 </p>
                 {verified?.geoMismatch && verified?.serverCountry && (
                   <p className="text-[9px] font-mono text-red-500 mt-1">
-                    Server: {verified.serverCountry}
+                    {t('fingerprint.serverCountry', { country: verified.serverCountry })}
                   </p>
                 )}
               </div>
@@ -528,7 +528,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             <div className="flex items-center gap-4 mt-3">
               <div className="flex items-center gap-1">
                 <CircleAlert size={8} className="text-amber-400" />
-                <span className="text-[8px] font-mono text-neutral-400 uppercase">AI Estimate</span>
+                <span className="text-[8px] font-mono text-neutral-400 uppercase">{t('fingerprint.aiEstimate')}</span>
               </div>
             </div>
 
@@ -536,7 +536,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             {verified?.privacyProtected && (
               <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-100">
                 <ShieldOff size={12} className="text-amber-500 shrink-0" />
-                <span className="text-[10px] font-bold text-amber-700">WHOIS Privacy Protected</span>
+                <span className="text-[10px] font-bold text-amber-700">{t('fingerprint.whoisPrivacy')}</span>
               </div>
             )}
 
@@ -552,8 +552,8 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                       (verified.safeBrowsingThreats?.length || 0) > 0 ? 'text-red-600 font-bold' : 'text-neutral-500'
                     }`}>
                       {(verified.safeBrowsingThreats?.length || 0) > 0
-                        ? `Safe Browsing: ${verified.safeBrowsingThreats!.join(', ')}`
-                        : 'Safe Browsing: No threats'}
+                        ? t('fingerprint.safeBrowsingFlagged', { threats: verified.safeBrowsingThreats!.join(', ') })
+                        : t('fingerprint.safeBrowsingClean')}
                     </span>
                   </div>
                 )}
@@ -561,7 +561,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   <div className="flex items-center gap-2">
                     <AlertTriangle size={10} className="text-red-500" />
                     <span className="text-[10px] font-mono text-red-600 font-bold">
-                      HOMOGRAPH ATTACK DETECTED (Punycode/Cyrillic)
+                      {t('fingerprint.homographAttack')}
                     </span>
                   </div>
                 )}
@@ -569,7 +569,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
                   <div className="flex items-center gap-2">
                     <ExternalLink size={10} className="text-amber-500" />
                     <span className="text-[10px] font-mono text-amber-600 truncate">
-                      Redirects to: {verified.finalUrl}
+                      {t('fingerprint.redirectsTo', { url: verified.finalUrl })}
                     </span>
                   </div>
                 )}
@@ -596,7 +596,7 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
               verified.geoMismatchSeverity === 'high' ? 'text-red-500' : 'text-amber-500'
             }`}>
               <AlertTriangle size={12} />
-              Geographic Inconsistency
+              {t('fingerprint.geoInconsistency')}
               <span className={`ml-auto text-[8px] font-mono px-2 py-0.5 rounded-full ${
                 verified.geoMismatchSeverity === 'high'
                   ? 'bg-red-200 text-red-700'
@@ -648,13 +648,13 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             {activeContent.action}
           </div>
           <p className="text-[10px] text-neutral-400 text-center mt-3 leading-relaxed px-2">
-            AI can make mistakes. Only scan QR codes from verified sources.
+            {t('scan.aiDisclaimer')}
           </p>
           <button
             onClick={onReset}
             className="w-full mt-3 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
           >
-            <RefreshCw size={12} /> START ANOTHER SCAN
+            <RefreshCw size={12} /> {t('result.startAnotherScan')}
           </button>
         </div>
       </div>

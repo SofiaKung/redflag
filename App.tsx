@@ -8,12 +8,14 @@ import {
   RefreshCw,
   Globe,
   ShieldAlert,
-  MapPin
 } from 'lucide-react';
 import { AppState, RiskLevel, AnalysisResult } from './types';
 import { analyzeContent } from './services/geminiService';
+import { useI18n } from './i18n/I18nContext';
+import { SUPPORTED_LOCALES } from './i18n/locales';
 import Aperture from './components/Aperture';
 import ThreatStoryAndFeedback from './components/ThreatStoryAndFeedback';
+import LanguagePicker from './components/LanguagePicker';
 
 const QrScanner = lazy(() => import('./components/QrScanner'));
 const EvidenceModal = lazy(() => import('./components/EvidenceModal'));
@@ -56,16 +58,19 @@ const areLanguagesEquivalent = (left?: string, right?: string): boolean => {
 };
 
 const App: React.FC = () => {
+  const { t, locale } = useI18n();
   const [state, setState] = useState<AppState>(AppState.IDLE);
   const [isScanningQr, setIsScanningQr] = useState(false);
   const [modalMode, setModalMode] = useState<'screenshot' | 'link' | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [statusText, setStatusText] = useState("EXTRACTING DATA...");
+  const [statusText, setStatusText] = useState(t('analyzing.extractingData'));
   const [viewMode, setViewMode] = useState<'translated' | 'native'>('translated');
   const [analysisSource, setAnalysisSource] = useState<'qr' | 'screenshot' | 'link' | null>(null);
   const [scannedUrl, setScannedUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [userRegion, setUserRegion] = useState<{ country: string; countryCode: string } | null>(null);
+  const [showLanguagePicker, setShowLanguagePicker] = useState(false);
+  const currentLocaleLabel = SUPPORTED_LOCALES.find(l => l.code === locale)?.nativeName.slice(0, 3).toUpperCase() || locale.toUpperCase();
 
   // Detect user's country on mount
   useEffect(() => {
@@ -104,8 +109,9 @@ const App: React.FC = () => {
 
   const getReadableLanguage = () => {
     try {
-      const browserLangCode = navigator.language;
-      return new Intl.DisplayNames(['en'], { type: 'language' }).of(browserLangCode) || 'English';
+      // Use the i18n locale so Gemini analysis follows the user's chosen UI language
+      const langCode = locale.split('-')[0];
+      return new Intl.DisplayNames(['en'], { type: 'language' }).of(langCode) || 'English';
     } catch {
       return 'English';
     }
@@ -113,7 +119,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (state === AppState.ANALYZING) {
-      const texts = ["EXTRACTING PIXELS...", "IDENTIFYING BRAND...", "INTERCEPTING URL...", "NEURAL REASONING...", "MAPPING THREATS..."];
+      const texts = [t('analyzing.extractingPixels'), t('analyzing.identifyingBrand'), t('analyzing.interceptingUrl'), t('analyzing.neuralReasoning'), t('analyzing.mappingThreats')];
       let i = 0;
       const interval = setInterval(() => {
         i = (i + 1) % texts.length;
@@ -172,7 +178,7 @@ const App: React.FC = () => {
   const lazyFallback = (
     <div className="w-full py-10 text-center">
       <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-[0.2em]">
-        Loading module...
+        {t('common.loadingModule')}
       </span>
     </div>
   );
@@ -193,13 +199,18 @@ const App: React.FC = () => {
           </div>
           <span className="font-black tracking-tighter text-xl text-slate-900 uppercase">REDFLAG</span>
         </button>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100/60 rounded-full border border-neutral-200/50">
-          <MapPin size={10} className="text-neutral-500" />
+        <button
+          onClick={() => setShowLanguagePicker(true)}
+          className="flex items-center gap-2 px-3 py-1.5 bg-neutral-100/60 rounded-full border border-neutral-200/50 hover:bg-blue-50 hover:border-blue-200 transition-all"
+        >
+          <Globe size={10} className="text-neutral-500" />
           <span className="text-[9px] font-bold text-neutral-600 uppercase tracking-widest tabular-nums">
-            {userRegion ? userRegion.countryCode : '...'}
+            {currentLocaleLabel}
           </span>
-        </div>
+        </button>
       </header>
+
+      <LanguagePicker isOpen={showLanguagePicker} onClose={() => setShowLanguagePicker(false)} />
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 pt-24 pb-12">
         <AnimatePresence mode="wait">
@@ -212,8 +223,8 @@ const App: React.FC = () => {
           {modalMode === 'screenshot' && (
             <Suspense fallback={lazyFallback}>
               <EvidenceModal
-                title="Analyze Screenshots"
-                description="Upload up to 10 screenshots of chats, emails, or messages. Our AI will analyze the sequence for complex fraud patterns."
+                title={t('modal.screenshotTitle')}
+                description={t('modal.screenshotDesc')}
                 icon={<Search size={24} />}
                 maxFiles={10}
                 onConfirm={(images) => runAnalysis({ imagesBase64: images, source: 'screenshot' })}
@@ -226,8 +237,8 @@ const App: React.FC = () => {
           {modalMode === 'link' && (
             <Suspense fallback={lazyFallback}>
               <EvidenceModal
-                title="Forensic Link Check"
-                description="Upload a screenshot of the suspicious URL. We will perform a technical intercept and risk analysis."
+                title={t('modal.linkTitle')}
+                description={t('modal.linkDesc')}
                 icon={<LinkIcon size={24} />}
                 maxFiles={1}
                 onConfirm={(images) => runAnalysis({ imagesBase64: images, forensic: true, source: 'link' })}
@@ -252,10 +263,10 @@ const App: React.FC = () => {
               
               <div className="text-center mb-10">
                 <h2 className="text-3xl font-black tracking-tight text-slate-900 uppercase">
-                  Is this a Scam?
+                  {t('home.title')}
                 </h2>
                 <p className="text-sm text-slate-500 mt-3 font-medium px-4">
-                  Use AI to verify potential scams in images, QR codes, and links instantly.
+                  {t('home.subtitle')}
                 </p>
               </div>
 
@@ -267,7 +278,7 @@ const App: React.FC = () => {
                 >
                   <ShieldAlert size={18} className="text-red-500 mt-0.5 shrink-0" />
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-red-800">Analysis Failed</p>
+                    <p className="text-sm font-bold text-red-800">{t('error.analysisFailed')}</p>
                     <p className="text-xs text-red-600 mt-1">{error}</p>
                   </div>
                   <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600 text-lg leading-none">&times;</button>
@@ -284,9 +295,9 @@ const App: React.FC = () => {
                     <ScanLine className="w-7 h-7" />
                   </div>
                   <div className="ml-5 flex-1">
-                    <h3 className="font-black text-slate-900 text-lg tracking-tight uppercase">Scan QR Code</h3>
+                    <h3 className="font-black text-slate-900 text-lg tracking-tight uppercase">{t('home.scanQr')}</h3>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium">
-                      Reveal the hidden destination of QR code before you scan it.
+                      {t('home.scanQrDesc')}
                     </p>
                   </div>
                 </button>
@@ -300,9 +311,9 @@ const App: React.FC = () => {
                     <Search className="w-7 h-7" />
                   </div>
                   <div className="ml-5 flex-1">
-                    <h3 className="font-black text-slate-900 text-lg tracking-tight uppercase">Analyze Screenshot</h3>
+                    <h3 className="font-black text-slate-900 text-lg tracking-tight uppercase">{t('home.analyzeScreenshot')}</h3>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium">
-                      Upload chats (WhatsApp/Line), emails, or images to detect fraud.
+                      {t('home.analyzeScreenshotDesc')}
                     </p>
                   </div>
                 </button>
@@ -316,14 +327,14 @@ const App: React.FC = () => {
                     <LinkIcon className="w-7 h-7" />
                   </div>
                   <div className="ml-5 flex-1">
-                    <h3 className="font-black text-slate-900 text-lg tracking-tight uppercase">Verify Link</h3>
+                    <h3 className="font-black text-slate-900 text-lg tracking-tight uppercase">{t('home.verifyLink')}</h3>
                     <p className="text-xs text-slate-500 mt-1 leading-relaxed font-medium">
-                      Upload an screenshot of suspicious URL to check for phishing or malware.
+                      {t('home.verifyLinkDesc')}
                     </p>
                   </div>
                 </button>
               </div>
-              <p className="text-[10px] text-slate-400 text-center mt-4">Submissions are logged to help detect and prevent scams.</p>
+              <p className="text-[10px] text-slate-400 text-center mt-4">{t('home.submissionsLogged')}</p>
             </motion.div>
           )}
 
@@ -380,7 +391,7 @@ const App: React.FC = () => {
                     >
                       <Globe size={14} className="text-blue-600" />
                       <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-                        Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
+                        {t('result.showIn', { language: viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage })}
                       </span>
                     </button>
                   )}
@@ -392,7 +403,7 @@ const App: React.FC = () => {
                   <h2 className={`text-4xl font-black tracking-tighter uppercase leading-none ${result.riskLevel === RiskLevel.DANGER ? 'text-red-600' : 'text-emerald-600'}`}>
                     {activeContent.headline}
                   </h2>
-                  <p className="text-slate-600 text-xs font-mono uppercase tracking-[0.2em] font-bold">Risk Context: {result.category}</p>
+                  <p className="text-slate-600 text-xs font-mono uppercase tracking-[0.2em] font-bold">{t('result.riskContext', { category: result.category })}</p>
                   <div className="bg-slate-50/80 border border-slate-100 rounded-3xl p-6 backdrop-blur-sm">
                     <p className="text-slate-700 text-sm font-bold leading-relaxed">{activeContent.explanation}</p>
                   </div>
@@ -421,7 +432,7 @@ const App: React.FC = () => {
                     {activeContent.action}
                   </div>
                   <button onClick={reset} className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors">
-                  <RefreshCw size={12} /> START ANOTHER SCAN
+                  <RefreshCw size={12} /> {t('result.startAnotherScan')}
                   </button>
                 </div>
               </div>

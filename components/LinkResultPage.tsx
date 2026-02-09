@@ -11,6 +11,7 @@ import { RiskLevel, AnalysisResult, LocalizedAnalysis } from '../types';
 import Aperture from './Aperture';
 import ThreatStoryAndFeedback from './ThreatStoryAndFeedback';
 import DigitalFingerprint from './DigitalFingerprint';
+import { useI18n } from '../i18n/I18nContext';
 
 interface LinkResultPageProps {
   result: AnalysisResult;
@@ -123,6 +124,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
   onToggleLanguage,
   isDifferentLang,
 }) => {
+  const { t } = useI18n();
   const { displayed: streamedExplanation, isDone: explanationDone } = useStreamingText(
     activeContent.explanation,
     10
@@ -132,14 +134,14 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
   const verified = meta?.verified;
   const analyzedUrl = meta?.analyzedUrl || '';
   const infrastructureClues = [
-    meta?.suspiciousTld ? `Suspicious TLD: ${meta.suspiciousTld}` : '',
+    meta?.suspiciousTld ? t('link.suspiciousTldClue', { tld: meta.suspiciousTld }) : '',
     meta?.impersonating && meta.impersonating !== 'None detected'
-      ? `Impersonating: ${meta.impersonating}`
+      ? t('link.impersonatingClue', { brand: meta.impersonating })
       : '',
     verified?.safeBrowsingThreats && verified.safeBrowsingThreats.length > 0
-      ? `Safe Browsing flagged: ${verified.safeBrowsingThreats.join(', ')}`
+      ? t('link.safeBrowsingClue', { threats: verified.safeBrowsingThreats.join(', ') })
       : '',
-    verified?.homographAttack ? 'Homograph attack indicators detected' : '',
+    verified?.homographAttack ? t('link.homographClue') : '',
     verified?.geoMismatch && verified.geoMismatchDetails.length > 0 ? verified.geoMismatchDetails[0] : '',
     ...activeContent.redFlags,
   ].filter(Boolean).slice(0, 3) as string[];
@@ -168,7 +170,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             >
               <Globe size={14} className="text-blue-600" />
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-                Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
+                {t('result.showIn', { language: viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage })}
               </span>
             </button>
           )}
@@ -182,7 +184,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             {activeContent.headline}
           </h2>
           <p className="text-slate-600 text-xs font-mono uppercase tracking-[0.2em] font-bold">
-            Risk Context: {result.category}
+            {t('result.riskContext', { category: result.category })}
           </p>
           <div className="bg-slate-50/80 border border-slate-100 rounded-3xl p-6 backdrop-blur-sm">
             <p className="text-slate-700 text-sm font-bold leading-relaxed">
@@ -204,7 +206,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
           {analyzedUrl && (
             <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-3 flex items-center gap-2">
-                <Globe size={12} /> Detected URL Structure
+                <Globe size={12} /> {t('link.detectedUrlStructure')}
               </h4>
               <UrlAutopsy
                 url={analyzedUrl}
@@ -215,11 +217,8 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                 <div className="mt-3 flex items-start gap-2">
                   <div className="w-0.5 h-full min-h-[2rem] bg-gradient-to-b from-blue-500 to-transparent rounded-full shrink-0" />
                   <p className="text-[11px] text-blue-600 leading-snug">
-                    <span className="font-black">AI Insight:</span> The use of{' '}
-                    <code className="bg-blue-100 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">
-                      {meta.suspiciousTld}
-                    </code>{' '}
-                    is a strong indicator of fraudulent activity.
+                    <span className="font-black">{t('link.aiInsight')}</span>{' '}
+                    {t('scan.suspiciousTldNote', { tld: meta.suspiciousTld })}
                   </p>
                 </div>
               )}
@@ -230,7 +229,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
           {meta && meta.impersonating && meta.impersonating !== 'None detected' && (
             <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-3 flex items-center gap-2">
-                <Shield size={12} /> Impersonation Analysis
+                <Shield size={12} /> {t('scan.impersonationAnalysis')}
               </h4>
               <div className="space-y-2">
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-neutral-50 border border-neutral-100">
@@ -239,7 +238,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">
-                      Impersonating
+                      {t('scan.impersonating')}
                     </p>
                     <p className="text-sm font-bold text-slate-900 truncate">{meta.impersonating}</p>
                   </div>
@@ -250,7 +249,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[9px] font-mono text-neutral-400 uppercase tracking-wider">
-                      Actual Destination
+                      {t('scan.actualDestination')}
                     </p>
                     <p className="text-sm font-bold text-red-600 font-mono truncate">
                       {meta.actualDomain}
@@ -292,7 +291,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             onClick={onReset}
             className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
           >
-            <RefreshCw size={12} /> START ANOTHER SCAN
+            <RefreshCw size={12} /> {t('result.startAnotherScan')}
           </button>
         </div>
       </div>

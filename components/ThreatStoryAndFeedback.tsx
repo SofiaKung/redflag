@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Ban, Anchor, Zap, ShieldAlert } from 'lucide-react';
 import { submitFeedback } from '../services/geminiService';
+import { useI18n } from '../i18n/I18nContext';
 
 interface ThreatStoryAndFeedbackProps {
   hook: string;
@@ -19,6 +20,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
   category,
   analysisId,
 }) => {
+  const { t } = useI18n();
   const [feedbackChoice, setFeedbackChoice] = useState<FeedbackChoice>(null);
 
   const topClues = useMemo(
@@ -30,14 +32,14 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
     <div className="space-y-3">
       <div className="px-1 flex justify-center">
         <h4 className="text-slate-600 text-xs font-mono uppercase tracking-[0.2em] font-bold text-center leading-none">
-          Scam Analysis
+          {t('threat.scamAnalysis')}
         </h4>
       </div>
 
       <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
         <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400 mb-2 flex items-center gap-2">
           <Anchor size={12} className="text-blue-500" />
-          The Hook
+          {t('threat.theHook')}
         </p>
         <p className="text-sm font-bold text-slate-800 leading-snug">{hook}</p>
       </div>
@@ -45,7 +47,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
       <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
         <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400 mb-2 flex items-center gap-2">
           <Zap size={12} className="text-amber-500" />
-          The Modus Operandi
+          {t('threat.modusOperandi')}
         </p>
         <p className="text-sm font-bold text-slate-800 leading-snug">{trap}</p>
       </div>
@@ -53,10 +55,10 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
       <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
         <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400 mb-2 flex items-center gap-2">
           <ShieldAlert size={12} className="text-red-500" />
-          Risk Signals
+          {t('threat.riskSignals')}
         </p>
         <div className="space-y-2">
-          {(topClues.length > 0 ? topClues : ['No additional technical signals detected.']).map((clue, idx) => (
+          {(topClues.length > 0 ? topClues : [t('threat.noSignals')]).map((clue, idx) => (
             <div key={`${clue}-${idx}`} className="flex items-start gap-2">
               <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
               <p className="text-sm font-bold text-slate-700 leading-snug">{clue}</p>
@@ -67,7 +69,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
 
       <div className="bg-neutral-50/40 border border-neutral-100 rounded-3xl p-6">
         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-4 text-center">
-          Was This Correct?
+          {t('feedback.wasCorrect')}
         </h4>
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -82,7 +84,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
             }`}
           >
             <Check size={14} />
-            Yes
+            {t('feedback.yes')}
           </button>
           <button
             onClick={() => {
@@ -96,12 +98,12 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
             }`}
           >
             <Ban size={14} />
-            No
+            {t('feedback.no')}
           </button>
         </div>
         {feedbackChoice && (
           <p className="mt-3 text-[11px] font-bold text-neutral-500 text-center">
-            Thanks. Feedback recorded for this {category.toLowerCase()} assessment.
+            {t('feedback.recorded', { category: category.toLowerCase() })}
           </p>
         )}
       </div>

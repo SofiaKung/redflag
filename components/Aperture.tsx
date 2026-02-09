@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useI18n } from '../i18n/I18nContext';
 
 interface ApertureProps {
   isAnalyzing: boolean;
@@ -8,6 +9,7 @@ interface ApertureProps {
 }
 
 const Aperture: React.FC<ApertureProps> = ({ isAnalyzing, score }) => {
+  const { t } = useI18n();
   const radius = 90;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = score !== undefined ? circumference - (score / 100) * circumference : circumference;
@@ -99,7 +101,7 @@ const Aperture: React.FC<ApertureProps> = ({ isAnalyzing, score }) => {
               {score}
             </div>
             <div className="text-[10px] font-mono tracking-[0.3em] font-bold text-neutral-400 mt-2 uppercase">
-              Threat_Level
+              {t('aperture.threatLevel')}
             </div>
           </motion.div>
         ) : (
@@ -111,7 +113,7 @@ const Aperture: React.FC<ApertureProps> = ({ isAnalyzing, score }) => {
                 isAnalyzing ? 'text-blue-600' : 'text-neutral-300'
               }`}
             >
-              {isAnalyzing ? "ANALYZING..." : "ENGINE_IDLE"}
+              {isAnalyzing ? t('aperture.analyzing') : t('aperture.engineIdle')}
             </motion.div>
             {!isAnalyzing && (
                <div className="mt-2 flex justify-center gap-1">

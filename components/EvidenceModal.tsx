@@ -2,6 +2,7 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldAlert, Globe, Loader2, Upload, Trash2, Plus } from 'lucide-react';
+import { useI18n } from '../i18n/I18nContext';
 
 interface EvidenceModalProps {
   onConfirm: (imagesBase64: string[]) => void;
@@ -22,6 +23,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
   description, 
   icon 
 }) => {
+  const { t } = useI18n();
   const [images, setImages] = useState<{ id: string, url: string, base64: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -34,12 +36,12 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
     const filesToProcess = files.slice(0, remainingSlots);
 
     if (files.length > remainingSlots) {
-      setError(`Maximum ${maxFiles} images allowed.`);
+      setError(t('evidence.maxError', { max: maxFiles }));
     }
 
     filesToProcess.forEach(file => {
       if (!file.type.startsWith('image/')) {
-        setError("Only image files are accepted.");
+        setError(t('evidence.imageOnly'));
         return;
       }
       const reader = new FileReader();
@@ -65,7 +67,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
 
   const handleAnalyze = () => {
     if (images.length === 0) {
-      setError("Please provide at least one screenshot for forensic inspection.");
+      setError(t('evidence.minError'));
       return;
     }
     setError(null);
@@ -115,7 +117,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
                 }`}
               >
                 <Upload className="text-neutral-300 mb-2" size={32} />
-                <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Select Screenshot</span>
+                <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">{t('evidence.selectScreenshot')}</span>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -136,7 +138,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
                     className="aspect-video rounded-2xl border-2 border-dashed border-neutral-100 flex flex-col items-center justify-center text-neutral-300 hover:border-blue-300 hover:text-blue-500 transition-all"
                   >
                     <Plus size={20} />
-                    <span className="text-[10px] font-black uppercase mt-1">Add More</span>
+                    <span className="text-[10px] font-black uppercase mt-1">{t('evidence.addMore')}</span>
                   </button>
                 )}
               </div>
@@ -153,7 +155,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
 
             <div className="flex justify-between items-center px-1">
                <div className="text-[10px] font-mono text-neutral-400 uppercase font-bold tracking-widest">
-                 {images.length} / {maxFiles} Evidence Capsules
+                 {t('evidence.capsuleCount', { count: images.length, max: maxFiles })}
                </div>
                <AnimatePresence>
                 {error && (
@@ -174,7 +176,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
                 disabled={isLoading}
                 className="flex-1 py-4 text-sm font-bold text-slate-400 uppercase tracking-widest hover:text-slate-900 transition-colors"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button 
                 onClick={handleAnalyze}
@@ -184,10 +186,10 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
                 {isLoading ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Analyzing...</span>
+                    <span>{t('evidence.analyzing')}</span>
                   </>
                 ) : (
-                  <span>Run Analysis</span>
+                  <span>{t('evidence.runAnalysis')}</span>
                 )}
               </button>
             </div>
@@ -196,7 +198,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
 
         <div className="bg-slate-50 px-8 py-4 flex items-center justify-center gap-2 shrink-0">
           <Globe size={12} className="text-slate-400" />
-          <span className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-widest">Submissions are logged to help detect and prevent scams.</span>
+          <span className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-widest">{t('home.submissionsLogged')}</span>
         </div>
       </motion.div>
     </motion.div>

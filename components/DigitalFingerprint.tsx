@@ -14,6 +14,7 @@ import {
   Phone,
 } from 'lucide-react';
 import { LinkMetadata } from '../types';
+import { useI18n } from '../i18n/I18nContext';
 
 // --- Metadata severity color helper ---
 const getMetaSeverity = (field: string, value: string | number): string => {
@@ -35,6 +36,7 @@ interface DigitalFingerprintProps {
 }
 
 const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
+  const { t } = useI18n();
   const verified = meta.verified;
 
   return (
@@ -42,7 +44,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
       {/* Digital Fingerprint Card */}
       <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-3 flex items-center gap-2">
-          <Fingerprint size={12} /> Digital Fingerprint
+          <Fingerprint size={12} /> {t('fingerprint.title')}
         </h4>
         <div className="grid grid-cols-2 gap-3">
           {/* Domain Age */}
@@ -50,7 +52,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-neutral-400">
                 <Clock size={12} />
-                <span className="text-[9px] uppercase font-black tracking-wider">Domain Age</span>
+                <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.domainAge')}</span>
               </div>
               {!verified?.domainAge && (
                 <CircleAlert size={10} className="text-amber-400" />
@@ -61,7 +63,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
             </p>
             {verified?.registrationDate && (
               <p className="text-[9px] font-mono text-neutral-400 mt-1">
-                Reg: {new Date(verified.registrationDate).toLocaleDateString()}
+                {t('fingerprint.regDate', { date: new Date(verified.registrationDate).toLocaleDateString() })}
               </p>
             )}
           </div>
@@ -71,11 +73,11 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-neutral-400">
                 <Building2 size={12} />
-                <span className="text-[9px] uppercase font-black tracking-wider">Registrar</span>
+                <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.registrar')}</span>
               </div>
             </div>
             <p className="text-sm font-bold text-slate-800">
-              {verified?.registrar || 'Unknown'}
+              {verified?.registrar || t('fingerprint.unknown')}
             </p>
           </div>
 
@@ -84,7 +86,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-neutral-400">
                 <Server size={12} />
-                <span className="text-[9px] uppercase font-black tracking-wider">Hosted In</span>
+                <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.hostedIn')}</span>
               </div>
               {!verified?.serverCountry && (
                 <CircleAlert size={10} className="text-amber-400" />
@@ -107,7 +109,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-neutral-400">
                 <MapPin size={12} />
-                <span className="text-[9px] uppercase font-black tracking-wider">Registrant</span>
+                <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.registrant')}</span>
               </div>
               {!(verified && verified.checksCompleted.includes('whois')) && (
                 <CircleAlert size={10} className="text-amber-400" />
@@ -117,11 +119,11 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
               verified?.privacyProtected ? 'text-amber-600' : verified?.geoMismatch ? 'text-red-600' : 'text-slate-800'
             }`}>
               {verified?.registrantOrg || verified?.registrantName
-                || (verified?.privacyProtected ? 'Privacy Protected' : 'Unknown')}
+                || (verified?.privacyProtected ? t('fingerprint.privacyProtected') : t('fingerprint.unknown'))}
             </p>
             <p className="text-[9px] font-mono text-neutral-400 mt-1">
               {[verified?.registrantCity, verified?.registrantCountry]
-                .filter(Boolean).join(', ') || 'Location unknown'}
+                .filter(Boolean).join(', ') || t('fingerprint.locationUnknown')}
             </p>
           </div>
 
@@ -129,13 +131,13 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
           <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
             <div className="flex items-center gap-2 text-neutral-400 mb-2">
               <Mail size={12} />
-              <span className="text-[9px] uppercase font-black tracking-wider">Contact Email</span>
+              <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.contactEmail')}</span>
             </div>
             <p className={`text-sm font-bold break-all leading-snug ${
               verified?.registrantEmail?.includes('withheldforprivacy') || verified?.registrantEmail?.includes('whoisguard')
                 ? 'text-amber-600' : 'text-slate-800'
             }`}>
-              {verified?.registrantEmail || 'Not available'}
+              {verified?.registrantEmail || t('fingerprint.notAvailable')}
             </p>
           </div>
 
@@ -143,10 +145,10 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
           <div className="p-4 rounded-2xl bg-neutral-50 border border-neutral-100">
             <div className="flex items-center gap-2 text-neutral-400 mb-2">
               <Phone size={12} />
-              <span className="text-[9px] uppercase font-black tracking-wider">Contact Phone</span>
+              <span className="text-[9px] uppercase font-black tracking-wider">{t('fingerprint.contactPhone')}</span>
             </div>
             <p className="text-sm font-bold text-slate-800">
-              {verified?.registrantTelephone || 'Not available'}
+              {verified?.registrantTelephone || t('fingerprint.notAvailable')}
             </p>
           </div>
         </div>
@@ -155,7 +157,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
         <div className="flex items-center gap-4 mt-3">
           <div className="flex items-center gap-1">
             <CircleAlert size={8} className="text-amber-400" />
-            <span className="text-[8px] font-mono text-neutral-400 uppercase">AI Estimate</span>
+            <span className="text-[8px] font-mono text-neutral-400 uppercase">{t('fingerprint.aiEstimate')}</span>
           </div>
         </div>
 
@@ -163,7 +165,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
         {verified?.privacyProtected && (
           <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-xl bg-amber-50/80 border border-amber-100">
             <ShieldOff size={12} className="text-amber-500 shrink-0" />
-            <span className="text-[10px] font-bold text-amber-700">WHOIS Privacy Protected</span>
+            <span className="text-[10px] font-bold text-amber-700">{t('fingerprint.whoisPrivacy')}</span>
           </div>
         )}
 
@@ -179,8 +181,8 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
                   (verified.safeBrowsingThreats?.length || 0) > 0 ? 'text-red-600 font-bold' : 'text-neutral-500'
                 }`}>
                   {(verified.safeBrowsingThreats?.length || 0) > 0
-                    ? `Safe Browsing: ${verified.safeBrowsingThreats!.join(', ')}`
-                    : 'Safe Browsing: No threats'}
+                    ? t('fingerprint.safeBrowsingFlagged', { threats: verified.safeBrowsingThreats!.join(', ') })
+                    : t('fingerprint.safeBrowsingClean')}
                 </span>
               </div>
             )}
@@ -188,7 +190,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
               <div className="flex items-center gap-2">
                 <AlertTriangle size={10} className="text-red-500" />
                 <span className="text-[10px] font-mono text-red-600 font-bold">
-                  HOMOGRAPH ATTACK DETECTED (Punycode/Cyrillic)
+                  {t('fingerprint.homographAttack')}
                 </span>
               </div>
             )}
@@ -209,7 +211,7 @@ const DigitalFingerprint: React.FC<DigitalFingerprintProps> = ({ meta }) => {
             verified.geoMismatchSeverity === 'high' ? 'text-red-500' : 'text-amber-500'
           }`}>
             <AlertTriangle size={12} />
-            Geographic Inconsistency
+            {t('fingerprint.geoInconsistency')}
             <span className={`ml-auto text-[8px] font-mono px-2 py-0.5 rounded-full ${
               verified.geoMismatchSeverity === 'high'
                 ? 'bg-red-200 text-red-700'
