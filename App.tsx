@@ -25,7 +25,7 @@ const LinkResultPage = lazy(() => import('./components/LinkResultPage'));
 const normalizeLanguageName = (language?: string): string => {
   if (!language) return '';
 
-  const cleaned = language
+  let cleaned = language
     .toLowerCase()
     .replace(/\(.*?\)/g, ' ')
     .replace(/[_-]/g, ' ')
@@ -33,6 +33,12 @@ const normalizeLanguageName = (language?: string): string => {
     .trim();
 
   if (!cleaned) return '';
+
+  // Strip language qualifiers so "Traditional Chinese" matches "Chinese", etc.
+  const qualifiers = ['traditional', 'simplified', 'brazilian', 'european', 'latin american', 'modern', 'classical', 'standard'];
+  for (const q of qualifiers) {
+    cleaned = cleaned.replace(new RegExp(`\\b${q}\\b`, 'g'), '').trim().replace(/\s+/g, ' ');
+  }
 
   const aliasMap: Record<string, string> = {
     'british english': 'english',
@@ -43,10 +49,32 @@ const normalizeLanguageName = (language?: string): string => {
     'english united states': 'english',
     'en gb': 'english',
     'en us': 'english',
+    // Chinese variants Gemini may return
+    'mandarin': 'chinese',
+    'mandarin chinese': 'chinese',
+    'cantonese': 'chinese',
+    '\u4e2d\u6587': 'chinese',           // 中文
+    '\u7b80\u4f53\u4e2d\u6587': 'chinese', // 简体中文
+    '\u7e41\u9ad4\u4e2d\u6587': 'chinese', // 繁體中文
+    // Thai
+    '\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22': 'thai',   // ภาษาไทย
+    '\u0e44\u0e17\u0e22': 'thai',                             // ไทย
+    // Vietnamese
+    'ti\u1ebfng vi\u1ec7t': 'vietnamese', // Tiếng Việt
+    // Indonesian / Malay
+    'bahasa indonesia': 'indonesian',
+    'bahasa melayu': 'malay',
+    'malay': 'malay',
+    // Portuguese
+    'portugu\u00eas': 'portuguese',       // Português
+    // Spanish
+    'espa\u00f1ol': 'spanish',            // Español
+    'castellano': 'spanish',
   };
 
   if (aliasMap[cleaned]) return aliasMap[cleaned];
   if (cleaned.includes('english')) return 'english';
+  if (cleaned.includes('chinese') || cleaned.includes('\u4e2d\u6587')) return 'chinese';
   return cleaned;
 };
 
@@ -54,7 +82,9 @@ const areLanguagesEquivalent = (left?: string, right?: string): boolean => {
   const normalizedLeft = normalizeLanguageName(left);
   const normalizedRight = normalizeLanguageName(right);
   if (!normalizedLeft || !normalizedRight) return false;
-  return normalizedLeft === normalizedRight;
+  return normalizedLeft === normalizedRight
+    || normalizedLeft.includes(normalizedRight)
+    || normalizedRight.includes(normalizedLeft);
 };
 
 const App: React.FC = () => {
@@ -148,9 +178,22 @@ const App: React.FC = () => {
         imagesBase64: inputData.imagesBase64,
         userLanguage,
         userCountryCode: userRegion?.countryCode,
+        source: inputData.source,
       });
 
       setResult(analysis);
+      // Default to the version that's in the user's chosen language
+      const userLanguageForMode = getReadableLanguage();
+      const langMatch = areLanguagesEquivalent(analysis.detectedNativeLanguage, userLanguageForMode);
+      console.log('[viewMode] detectedNativeLanguage:', JSON.stringify(analysis.detectedNativeLanguage),
+        '| userLanguageForMode:', JSON.stringify(userLanguageForMode),
+        '| userSystemLanguage:', JSON.stringify(analysis.userSystemLanguage),
+        '| match:', langMatch);
+      if (langMatch) {
+        setViewMode('native');
+      } else {
+        setViewMode('translated');
+      }
       setState(AppState.RESULT);
     } catch (err: any) {
       console.error(err);

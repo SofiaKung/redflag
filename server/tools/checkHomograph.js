@@ -12,7 +12,7 @@ export function checkHomograph({ hostname }) {
 
   // Mixed script detection (Latin + non-Latin in same label)
   const latinPattern = /[a-zA-Z]/;
-  const nonLatinPattern = /[^\x00-\x7F]/u;
+  const nonLatinPattern = /\P{ASCII}/u;
   const hasMixedScript = latinPattern.test(hostname) && nonLatinPattern.test(hostname);
 
   const isHomograph = hasPunycode || hasCyrillic || hasZeroWidth || hasMixedScript;

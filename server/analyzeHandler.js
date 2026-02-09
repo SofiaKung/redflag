@@ -496,7 +496,7 @@ async function runLegacy({ url, text, imagesBase64, userLanguage, userCountryCod
 export async function analyzeContent({ url, text, imagesBase64, userLanguage, userCountryCode, env }) {
   const useAgentic = env.USE_AGENTIC_API === 'true';
   const startTime = Date.now();
-  let mode = useAgentic ? 'agentic' : 'legacy';
+  const mode = useAgentic ? 'agentic' : 'legacy';
 
   try {
     let result;

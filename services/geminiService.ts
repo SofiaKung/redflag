@@ -13,6 +13,7 @@ export const analyzeContent = async (input: {
   imagesBase64?: string[];
   userLanguage: string;
   userCountryCode?: string;
+  source?: 'qr' | 'screenshot' | 'link';
 }): Promise<AnalysisResult> => {
   const response = await fetch(ANALYZE_ENDPOINT, {
     method: 'POST',
