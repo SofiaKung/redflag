@@ -45,7 +45,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
       <div className="bg-white/70 border border-neutral-100 rounded-3xl p-6 shadow-sm">
         <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-neutral-400 mb-2 flex items-center gap-2">
           <Zap size={12} className="text-amber-500" />
-          The Trap
+          The Modus Operandi
         </p>
         <p className="text-sm font-bold text-slate-800 leading-snug">{trap}</p>
       </div>
@@ -66,7 +66,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
       </div>
 
       <div className="bg-neutral-50/40 border border-neutral-100 rounded-3xl p-6">
-        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-4">
+        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-400 mb-4 text-center">
           Was This Correct?
         </h4>
         <div className="grid grid-cols-2 gap-2">
@@ -100,7 +100,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
           </button>
         </div>
         {feedbackChoice && (
-          <p className="mt-3 text-[11px] font-bold text-neutral-500">
+          <p className="mt-3 text-[11px] font-bold text-neutral-500 text-center">
             Thanks. Feedback recorded for this {category.toLowerCase()} assessment.
           </p>
         )}

@@ -51,8 +51,8 @@ export async function logAnalysis(data, env) {
       risk_level: result?.riskLevel || null,
       risk_score: typeof result?.score === 'number' ? result.score : null,
       fraud_category: result?.category || null,
-      detected_language: result?.detectedNativeLanguage || null,
-      user_language: result?.userSystemLanguage || null,
+      scam_language: result?.detectedNativeLanguage || null,
+      user_device_language: result?.userSystemLanguage || null,
       api_mode: data.apiMode || null,
       response_time_ms: data.responseTimeMs || null,
       registrar: verified?.registrar || null,
@@ -65,7 +65,7 @@ export async function logAnalysis(data, env) {
       safe_browsing_threats: verified?.safeBrowsingThreats || [],
       scanned_text: result?.scannedText || null,
       user_country_code: data.userCountryCode || null,
-      scam_country: verified?.serverCountry || null,
+      scam_origin: result?.scamCountryCode || data.userCountryCode || null,
       full_result: result,
     };
 
@@ -109,6 +109,36 @@ export async function logAnalysis(data, env) {
   } catch (err) {
     console.error('Supabase logAnalysis error:', err?.message);
     return null;
+  }
+}
+
+/**
+ * Log an analysis error to Supabase (fire-and-forget).
+ *
+ * @param {object} data
+ * @param {string} data.error - Error message
+ * @param {string} [data.rawResponse] - Raw Gemini response (first 2000 chars)
+ * @param {string} [data.url] - Input URL if any
+ * @param {string} [data.inputType] - 'url' | 'text' | 'screenshot'
+ * @param {string} [data.apiMode] - 'agentic' | 'legacy'
+ * @param {number} [data.responseTimeMs]
+ * @param {object} env
+ */
+export async function logError(data, env) {
+  const supabase = getClient(env);
+  if (!supabase) return;
+
+  try {
+    await supabase.from('analysis_errors').insert({
+      error_message: data.error || 'Unknown error',
+      raw_response: data.rawResponse?.slice(0, 2000) || null,
+      analyzed_url: data.url || null,
+      input_type: data.inputType || null,
+      api_mode: data.apiMode || null,
+      response_time_ms: data.responseTimeMs || null,
+    });
+  } catch (err) {
+    console.error('Supabase logError failed:', err?.message);
   }
 }
 

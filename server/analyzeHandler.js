@@ -11,12 +11,17 @@ import { runAgentLoop } from './agentLoop.js';
 import { toolDefinitions, executeTool } from './tools/index.js';
 import { getRegistrableDomain, formatDomainAge } from './tools/rdapLookup.js';
 import { runGeminiGenerate } from './geminiProxy.js';
+import { logError } from './supabase.js';
 
 // ---- System Prompt ----
 
-function buildSystemPrompt(userLanguage) {
-  return `You are "RedFlag," a high-precision forensic cybersecurity AI that detects scams, phishing, and fraud.
+function buildSystemPrompt(userLanguage, userCountryCode) {
+  const locationContext = userCountryCode
+    ? `\nUSER CONTEXT:\n- Device language: "${userLanguage}"\n- User location: "${userCountryCode}" (use this for local context — reference local emergency numbers, local brands, and regional scam patterns relevant to this country)\n`
+    : '';
 
+  return `You are "RedFlag," a high-precision forensic cybersecurity AI that detects scams, phishing, and fraud.
+${locationContext}
 CAPABILITIES:
 You have access to real-time security tools. Use them to gather intelligence when you encounter URLs or domain names.
 
@@ -63,7 +68,8 @@ Include a "linkMetadata" object with:
 - suspiciousTld: The TLD if suspicious (.xyz, .top, .pw, .loan, .click) or ""
 
 OUTPUT FORMAT:
-Return valid JSON only with these top-level fields:
+CRITICAL: Your final response MUST be a raw JSON object — no prose, no explanation, no markdown, no code fences. Start with { and end with }. Do NOT write any text before or after the JSON.
+Return this exact structure:
 {
   "riskLevel": "SAFE" | "CAUTION" | "DANGER",
   "score": <number 0-100>,
@@ -73,7 +79,8 @@ Return valid JSON only with these top-level fields:
   "native": { "headline", "explanation", "action", "hook", "trap", "redFlags": [] },
   "translated": { "headline", "explanation", "action", "hook", "trap", "redFlags": [] },
   "linkMetadata": { ... }, // only if URL was analyzed
-  "scannedText": "<the raw text you extracted/read from the screenshot or image. If the input was a URL, put the URL here. If no text could be extracted, use empty string.>"
+  "scannedText": "<the raw text you extracted/read from the screenshot or image. If the input was a URL, put the URL here. If no text could be extracted, use empty string.>",
+  "scamCountryCode": "<ISO 3166-1 alpha-2 country code of where the scam originates or targets, inferred from language, currency, phone numbers, brands, or other clues in the content. Examples: 'TW' for Taiwan scams, 'TH' for Thai scams, 'US' for US-targeting scams. Use empty string if unable to determine.>"
 }
 Every field is required. "score" MUST be a number.`;
 }
@@ -119,8 +126,9 @@ const responseSchema = {
     translated: localizedSchema,
     linkMetadata: linkMetadataSchema,
     scannedText: { type: 'string', description: 'Raw text extracted from the screenshot/image, or the submitted URL/text' },
+    scamCountryCode: { type: 'string', description: 'ISO 3166-1 alpha-2 country code of where the scam originates/targets' },
   },
-  required: ['riskLevel', 'score', 'category', 'detectedNativeLanguage', 'userSystemLanguage', 'native', 'translated', 'scannedText'],
+  required: ['riskLevel', 'score', 'category', 'detectedNativeLanguage', 'userSystemLanguage', 'native', 'translated', 'scannedText', 'scamCountryCode'],
 };
 
 // ---- Build Verified Data from Tool Results ----
@@ -239,12 +247,12 @@ function buildInputParts({ url, text, imagesBase64 }) {
 
 // ---- Agentic Path ----
 
-async function runAgentic({ url, text, imagesBase64, userLanguage, env }) {
+async function runAgentic({ url, text, imagesBase64, userLanguage, userCountryCode, env }) {
   const model = 'gemini-3-pro-preview';
   const apiKey = env.GEMINI_API_KEY || '';
   if (!apiKey) throw new Error('Server is missing GEMINI_API_KEY');
 
-  const systemInstruction = buildSystemPrompt(userLanguage);
+  const systemInstruction = buildSystemPrompt(userLanguage, userCountryCode);
   const input = buildInputParts({ url, text, imagesBase64 });
 
   const { text: responseText, toolResults } = await runAgentLoop({
@@ -258,12 +266,30 @@ async function runAgentic({ url, text, imagesBase64, userLanguage, env }) {
 
   if (!responseText) throw new Error('Empty response from Gemini');
 
-  // Strip markdown code fences if model wraps JSON in ```json ... ```
+  console.log('[agentic] Raw response (first 500 chars):', responseText.slice(0, 500));
+  console.log('[agentic] Tool results keys:', Object.keys(toolResults));
+
+  // Extract JSON from response — model may wrap in code fences or prose
   let cleaned = responseText.trim();
+  // Strip markdown code fences
   if (cleaned.startsWith('```')) {
     cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
   }
-  const result = JSON.parse(cleaned);
+  // If response doesn't start with {, try to find JSON object in the text
+  if (!cleaned.startsWith('{')) {
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[0];
+    }
+  }
+  let result;
+  try {
+    result = JSON.parse(cleaned);
+  } catch (parseErr) {
+    const err = new Error(`Failed to parse Gemini response as JSON: ${parseErr.message}`);
+    err.rawResponse = responseText.slice(0, 2000);
+    throw err;
+  }
 
   // Ensure required fields have correct types (no schema enforcement in Interactions API)
   if (typeof result.score !== 'number') {
@@ -296,7 +322,7 @@ async function runAgentic({ url, text, imagesBase64, userLanguage, env }) {
 
 // ---- Legacy Path (fallback) ----
 
-async function runLegacy({ url, text, imagesBase64, userLanguage, env }) {
+async function runLegacy({ url, text, imagesBase64, userLanguage, userCountryCode, env }) {
   const apiKey = env.GEMINI_API_KEY || '';
   if (!apiKey) throw new Error('Server is missing GEMINI_API_KEY');
 
@@ -333,7 +359,7 @@ async function runLegacy({ url, text, imagesBase64, userLanguage, env }) {
   }
 
   // Build prompt with real data
-  const systemPrompt = buildSystemPrompt(userLanguage);
+  const systemPrompt = buildSystemPrompt(userLanguage, userCountryCode);
   let userContent = '';
 
   if (url) {
@@ -411,8 +437,9 @@ async function runLegacy({ url, text, imagesBase64, userLanguage, env }) {
       translated: legacyLocalizedSchema,
       linkMetadata: legacyLinkMetadataSchema,
       scannedText: { type: SchemaType.STRING, description: 'Raw text extracted from the screenshot/image, or the submitted URL/text' },
+      scamCountryCode: { type: SchemaType.STRING, description: 'ISO 3166-1 alpha-2 country code of where the scam originates/targets' },
     },
-    required: ['riskLevel', 'score', 'category', 'detectedNativeLanguage', 'userSystemLanguage', 'native', 'translated', 'scannedText'],
+    required: ['riskLevel', 'score', 'category', 'detectedNativeLanguage', 'userSystemLanguage', 'native', 'translated', 'scannedText', 'scamCountryCode'],
   };
 
   const responseText = await runGeminiGenerate({
@@ -466,7 +493,7 @@ async function runLegacy({ url, text, imagesBase64, userLanguage, env }) {
  * @param {object} env - Environment variables
  * @returns {Promise<object>} AnalysisResult
  */
-export async function analyzeContent({ url, text, imagesBase64, userLanguage, env }) {
+export async function analyzeContent({ url, text, imagesBase64, userLanguage, userCountryCode, env }) {
   const useAgentic = env.USE_AGENTIC_API === 'true';
   const startTime = Date.now();
   let mode = useAgentic ? 'agentic' : 'legacy';
@@ -474,26 +501,24 @@ export async function analyzeContent({ url, text, imagesBase64, userLanguage, en
   try {
     let result;
     if (useAgentic) {
-      result = await runAgentic({ url, text, imagesBase64, userLanguage, env });
+      result = await runAgentic({ url, text, imagesBase64, userLanguage, userCountryCode, env });
     } else {
-      result = await runLegacy({ url, text, imagesBase64, userLanguage, env });
+      result = await runLegacy({ url, text, imagesBase64, userLanguage, userCountryCode, env });
     }
     const responseTimeMs = Date.now() - startTime;
     return { result, mode, responseTimeMs };
   } catch (error) {
-    // Fallback disabled for testing — let agentic errors surface directly
-    // TODO: Re-enable fallback after Interactions API is validated
-    // if (useAgentic) {
-    //   console.error('Agentic API failed, falling back to legacy:', error?.message);
-    //   mode = 'legacy';
-    //   try {
-    //     const result = await runLegacy({ url, text, imagesBase64, userLanguage, env });
-    //     const responseTimeMs = Date.now() - startTime;
-    //     return { result, mode, responseTimeMs };
-    //   } catch (legacyError) {
-    //     throw legacyError;
-    //   }
-    // }
+    const responseTimeMs = Date.now() - startTime;
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    // Fire-and-forget: log error to Supabase
+    logError({
+      error: message,
+      rawResponse: error?.rawResponse,
+      url,
+      inputType: url ? 'url' : imagesBase64?.length ? 'screenshot' : 'text',
+      apiMode: mode,
+      responseTimeMs,
+    }, env).catch(() => {});
     throw error;
   }
 }

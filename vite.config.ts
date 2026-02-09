@@ -13,7 +13,7 @@ import {
 } from './server/requestGuards.js';
 
 const analyzeContentServer = _analyzeContent as (opts: {
-  url?: string; text?: string; imagesBase64?: string[]; userLanguage: string; env: Record<string, string>;
+  url?: string; text?: string; imagesBase64?: string[]; userLanguage: string; userCountryCode?: string; env: Record<string, string>;
 }) => Promise<{ result: any; mode: string; responseTimeMs: number }>;
 const logAnalysisServer = _logAnalysis as (data: Record<string, any>, env: Record<string, string>) => Promise<string | null>;
 const submitFeedbackServer = _submitFeedback as (id: string, feedback: string, env: Record<string, string>) => Promise<boolean>;
@@ -207,6 +207,7 @@ const secretApiDevPlugin = (env: Record<string, string>) => ({
             text: textInput,
             imagesBase64: imagesInput,
             userLanguage,
+            userCountryCode: countryCode,
             env,
           });
 

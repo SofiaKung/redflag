@@ -71,6 +71,7 @@ export default async function handler(req, res) {
       text: textInput,
       imagesBase64: imagesInput,
       userLanguage,
+      userCountryCode: typeof userCountryCode === 'string' ? userCountryCode : undefined,
       env: process.env,
     });
 

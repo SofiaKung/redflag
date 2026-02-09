@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   ShieldAlert,
-  Ban,
   RefreshCw,
   Link as LinkIcon,
   ExternalLink,
@@ -24,6 +23,7 @@ import {
 } from 'lucide-react';
 import { RiskLevel, AnalysisResult, LocalizedAnalysis } from '../types';
 import Aperture from './Aperture';
+import ThreatStoryAndFeedback from './ThreatStoryAndFeedback';
 import { generateLinkPreview } from '../services/linkPreview';
 
 interface ScanResultPageProps {
@@ -231,10 +231,21 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
 }) => {
   const { displayed: streamedExplanation, isDone: explanationDone } = useStreamingText(activeContent.explanation, 10);
   const [copied, setCopied] = useState(false);
-  const [showRiskDetails, setShowRiskDetails] = useState(false);
 
   const meta = result.linkMetadata;
   const verified = meta?.verified;
+  const infrastructureClues = [
+    meta?.suspiciousTld ? `Suspicious TLD: ${meta.suspiciousTld}` : '',
+    meta?.impersonating && meta.impersonating !== 'None detected'
+      ? `Impersonating: ${meta.impersonating}`
+      : '',
+    verified?.safeBrowsingThreats && verified.safeBrowsingThreats.length > 0
+      ? `Safe Browsing flagged: ${verified.safeBrowsingThreats.join(', ')}`
+      : '',
+    verified?.homographAttack ? 'Homograph attack indicators detected' : '',
+    verified?.geoMismatch && verified.geoMismatchDetails.length > 0 ? verified.geoMismatchDetails[0] : '',
+    ...activeContent.redFlags,
+  ].filter(Boolean).slice(0, 3) as string[];
 
   useEffect(() => {
     triggerHaptic(result.riskLevel);
@@ -248,10 +259,6 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
     } catch {
       // Clipboard access may be blocked by browser permissions.
     }
-  };
-
-  const handleOpenLink = () => {
-    window.open(scannedUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -616,124 +623,41 @@ const ScanResultPage: React.FC<ScanResultPageProps> = ({
             </div>
           </motion.div>
         )}
+
+        <ThreatStoryAndFeedback
+          hook={activeContent.hook}
+          trap={activeContent.trap}
+          infrastructureClues={infrastructureClues}
+          category={result.category}
+          analysisId={result.analysisId}
+        />
       </motion.div>
 
       {/* ===== STICKY FOOTER ===== */}
       <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-2xl border-t border-neutral-100 z-50">
         <div className="max-w-md mx-auto px-1">
-          {result.riskLevel === RiskLevel.DANGER ? (
-            <>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={() => {
-                triggerHaptic(RiskLevel.DANGER);
-                alert('This link has been flagged and blocked.');
-              }}
-              className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-red-600 hover:bg-red-700 shadow-2xl shadow-red-500/30 flex items-center justify-center gap-2 transition-all"
-            >
-              <Ban size={16} />
-              Block & Report Link
-            </motion.button>
-            <button
-              onClick={() => setShowRiskDetails(true)}
-              className="w-full mt-3 text-[10px] text-neutral-400 hover:text-neutral-600 font-medium transition-colors"
-            >
-              I understand the risk, open anyway
-            </button>
-            <button
-              onClick={onReset}
-              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-            >
-              <RefreshCw size={12} /> START ANOTHER SCAN
-            </button>
-            </>
-          ) : result.riskLevel === RiskLevel.CAUTION ? (
-            <>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={handleOpenLink}
-              className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-amber-600 hover:bg-amber-700 shadow-2xl shadow-amber-500/30 flex items-center justify-center gap-2 transition-all"
-            >
-              <ExternalLink size={16} />
-              Proceed with Caution
-            </motion.button>
-            <button
-              onClick={onReset}
-              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-            >
-              <RefreshCw size={12} /> START ANOTHER SCAN
-            </button>
-            </>
-          ) : (
-            <>
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={handleOpenLink}
-              className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-slate-900 hover:bg-slate-800 shadow-2xl shadow-slate-500/20 flex items-center justify-center gap-2 transition-all"
-            >
-              <ExternalLink size={16} />
-              Open Link
-            </motion.button>
-            <button
-              onClick={onReset}
-              className="w-full mt-4 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
-            >
-              <RefreshCw size={12} /> START ANOTHER SCAN
-            </button>
-            </>
-          )}
+          <div
+            className={`w-full py-5 px-6 rounded-2xl text-center font-bold text-sm ${
+              result.riskLevel === RiskLevel.DANGER
+                ? 'bg-red-50 text-red-800 border border-red-200'
+                : result.riskLevel === RiskLevel.CAUTION
+                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+            }`}
+          >
+            {activeContent.action}
+          </div>
+          <p className="text-[10px] text-neutral-400 text-center mt-3 leading-relaxed px-2">
+            AI can make mistakes. Only scan QR codes from verified sources.
+          </p>
+          <button
+            onClick={onReset}
+            className="w-full mt-3 text-[10px] font-mono font-bold text-neutral-400 uppercase tracking-widest flex items-center justify-center gap-2 hover:text-slate-900 transition-colors"
+          >
+            <RefreshCw size={12} /> START ANOTHER SCAN
+          </button>
         </div>
       </div>
-
-      {/* Risk Override Confirmation Modal */}
-      <AnimatePresence>
-        {showRiskDetails && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm flex items-end justify-center"
-            onClick={() => setShowRiskDetails(false)}
-          >
-            <motion.div
-              initial={{ y: 100 }}
-              animate={{ y: 0 }}
-              exit={{ y: 100 }}
-              onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md bg-white rounded-t-3xl p-8 pb-10"
-            >
-              <div className="w-10 h-1 bg-neutral-200 rounded-full mx-auto mb-6" />
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <ShieldAlert className="w-5 h-5 text-red-500" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-lg">Are you sure?</h3>
-                  <p className="text-xs text-neutral-500 font-medium">This link was flagged as dangerous</p>
-                </div>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed mb-6">
-                Our AI has identified this URL as a potential threat. Opening it may expose you to phishing, malware, or credential theft. Proceed only if you fully understand the risks.
-              </p>
-              <button
-                onClick={() => {
-                  setShowRiskDetails(false);
-                  handleOpenLink();
-                }}
-                className="w-full py-4 rounded-2xl font-bold text-sm text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 transition-all mb-3"
-              >
-                Open Anyway
-              </button>
-              <button
-                onClick={() => setShowRiskDetails(false)}
-                className="w-full py-4 rounded-2xl font-bold text-sm text-white bg-slate-900 transition-all"
-              >
-                Go Back to Safety
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };
