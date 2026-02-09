@@ -3,12 +3,20 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { runGeminiGenerate } from './server/geminiProxy.js';
 import { getLinkIntelSecrets } from './server/linkIntelSecrets.js';
+import { analyzeContent as _analyzeContent } from './server/analyzeHandler.js';
+import { logAnalysis as _logAnalysis, submitFeedback as _submitFeedback } from './server/supabase.js';
 import { applyRateLimit } from './server/rateLimit.js';
 import {
   getClientIp,
   isRequestOriginAllowed,
   validatePublicHttpUrl,
 } from './server/requestGuards.js';
+
+const analyzeContentServer = _analyzeContent as (opts: {
+  url?: string; text?: string; imagesBase64?: string[]; userLanguage: string; env: Record<string, string>;
+}) => Promise<{ result: any; mode: string; responseTimeMs: number }>;
+const logAnalysisServer = _logAnalysis as (data: Record<string, any>, env: Record<string, string>) => Promise<string | null>;
+const submitFeedbackServer = _submitFeedback as (id: string, feedback: string, env: Record<string, string>) => Promise<boolean>;
 
 const readRequestBody = (req: any): Promise<string> =>
   new Promise((resolve, reject) => {
@@ -151,6 +159,109 @@ const secretApiDevPlugin = (env: Record<string, string>) => ({
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Secret intel request failed';
           sendJson(res, 502, { error: message });
+          return;
+        }
+      }
+
+      // ---- /api/analyze ----
+      if (req.method === 'POST' && urlPath === '/api/analyze') {
+        if (!isRequestOriginAllowed(req)) {
+          sendJson(res, 403, { error: 'Forbidden origin' });
+          return;
+        }
+
+        const rateLimit = applyRateLimit({
+          routeKey: 'analyze',
+          clientKey: rateLimitClientKey,
+        });
+        sendRateLimitHeaders(res, rateLimit);
+        if (!rateLimit.allowed) {
+          sendJson(res, 429, { error: 'Rate limit exceeded' });
+          return;
+        }
+
+        try {
+          const body = parseJson(await readRequestBody(req));
+          if (!body || typeof body !== 'object') {
+            sendJson(res, 400, { error: 'Invalid JSON payload' });
+            return;
+          }
+
+          const { url: reqUrl, text: reqText, imagesBase64, userLanguage, userCountryCode } = body;
+          if (!reqUrl && !reqText && (!imagesBase64 || !imagesBase64.length)) {
+            sendJson(res, 400, { error: 'Must provide url, text, or imagesBase64' });
+            return;
+          }
+          if (typeof userLanguage !== 'string' || !userLanguage.trim()) {
+            sendJson(res, 400, { error: 'userLanguage is required' });
+            return;
+          }
+
+          const urlInput = typeof reqUrl === 'string' ? reqUrl : undefined;
+          const textInput = typeof reqText === 'string' ? reqText : undefined;
+          const imagesInput = Array.isArray(imagesBase64) ? imagesBase64 : undefined;
+          const countryCode = typeof userCountryCode === 'string' ? userCountryCode : undefined;
+
+          const { result, mode, responseTimeMs } = await analyzeContentServer({
+            url: urlInput,
+            text: textInput,
+            imagesBase64: imagesInput,
+            userLanguage,
+            env,
+          });
+
+          // Fire-and-forget: log to Supabase
+          const analysisIdPromise = logAnalysisServer({
+            inputType: urlInput ? 'url' : imagesInput?.length ? 'screenshot' : 'text',
+            url: urlInput,
+            text: textInput,
+            screenshotBase64: imagesInput?.[0],
+            apiMode: mode,
+            responseTimeMs,
+            result,
+            userCountryCode: countryCode,
+          }, env).catch(() => null);
+
+          const analysisId = await Promise.race([
+            analysisIdPromise,
+            new Promise<null>(resolve => setTimeout(() => resolve(null), 2000)),
+          ]);
+
+          sendJson(res, 200, { ...(result as object), analysisId, apiMode: mode, responseTimeMs });
+          return;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Analysis failed';
+          console.error('Analyze error:', message);
+          sendJson(res, 502, { error: message });
+          return;
+        }
+      }
+
+      // ---- /api/feedback ----
+      if (req.method === 'POST' && urlPath === '/api/feedback') {
+        try {
+          const body = parseJson(await readRequestBody(req));
+          if (!body || typeof body !== 'object') {
+            sendJson(res, 400, { error: 'Invalid JSON payload' });
+            return;
+          }
+
+          const { analysisId, feedback } = body;
+          if (typeof analysisId !== 'string' || !analysisId) {
+            sendJson(res, 400, { error: 'analysisId is required' });
+            return;
+          }
+          if (feedback !== 'correct' && feedback !== 'incorrect') {
+            sendJson(res, 400, { error: 'feedback must be "correct" or "incorrect"' });
+            return;
+          }
+
+          const ok = await submitFeedbackServer(analysisId, feedback, env);
+          sendJson(res, ok ? 200 : 500, ok ? { success: true } : { error: 'Failed to save feedback' });
+          return;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Feedback failed';
+          sendJson(res, 500, { error: message });
           return;
         }
       }

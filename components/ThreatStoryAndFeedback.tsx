@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Check, Ban, Anchor, Zap, ShieldAlert } from 'lucide-react';
+import { submitFeedback } from '../services/geminiService';
 
 interface ThreatStoryAndFeedbackProps {
   hook: string;
   trap: string;
   infrastructureClues: string[];
   category: string;
+  analysisId?: string | null;
 }
 
 type FeedbackChoice = 'correct' | 'incorrect' | null;
@@ -15,6 +17,7 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
   trap,
   infrastructureClues,
   category,
+  analysisId,
 }) => {
   const [feedbackChoice, setFeedbackChoice] = useState<FeedbackChoice>(null);
 
@@ -68,7 +71,10 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
         </h4>
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => setFeedbackChoice('correct')}
+            onClick={() => {
+              setFeedbackChoice('correct');
+              if (analysisId) submitFeedback(analysisId, 'correct');
+            }}
             className={`py-4 rounded-2xl font-bold text-sm uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
               feedbackChoice === 'correct'
                 ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/20'
@@ -79,7 +85,10 @@ const ThreatStoryAndFeedback: React.FC<ThreatStoryAndFeedbackProps> = ({
             Yes
           </button>
           <button
-            onClick={() => setFeedbackChoice('incorrect')}
+            onClick={() => {
+              setFeedbackChoice('incorrect');
+              if (analysisId) submitFeedback(analysisId, 'incorrect');
+            }}
             className={`py-4 rounded-2xl font-bold text-sm uppercase tracking-widest transition-all border flex items-center justify-center gap-2 ${
               feedbackChoice === 'incorrect'
                 ? 'bg-red-600 text-white border-red-600 shadow-lg shadow-red-500/20'

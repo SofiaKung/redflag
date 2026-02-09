@@ -68,5 +68,9 @@ export interface AnalysisResult {
   userSystemLanguage: string;
   native: LocalizedAnalysis;
   translated: LocalizedAnalysis;
+  scannedText?: string;
   linkMetadata?: LinkMetadata;
+  analysisId?: string | null;
+  apiMode?: string;
+  responseTimeMs?: number;
 }

@@ -8,11 +8,10 @@ import {
   RefreshCw,
   Globe,
   ShieldAlert,
-  ChevronRight,
   MapPin
 } from 'lucide-react';
 import { AppState, RiskLevel, AnalysisResult } from './types';
-import { analyzeFraudContent, checkPhishingFromScreenshot, verifyUrlString } from './services/geminiService';
+import { analyzeContent } from './services/geminiService';
 import Aperture from './components/Aperture';
 import ThreatStoryAndFeedback from './components/ThreatStoryAndFeedback';
 
@@ -136,15 +135,14 @@ const App: React.FC = () => {
 
     try {
       const userLanguage = getReadableLanguage();
-      let analysis: AnalysisResult;
 
-      if (inputData.url) {
-        analysis = await verifyUrlString(inputData.url, userLanguage);
-      } else if (inputData.forensic && inputData.imagesBase64 && inputData.imagesBase64.length > 0) {
-        analysis = await checkPhishingFromScreenshot(inputData.imagesBase64[0], userLanguage);
-      } else {
-        analysis = await analyzeFraudContent({ ...inputData, userLanguage });
-      }
+      const analysis = await analyzeContent({
+        url: inputData.url,
+        text: inputData.text,
+        imagesBase64: inputData.imagesBase64,
+        userLanguage,
+        userCountryCode: userRegion?.countryCode,
+      });
 
       setResult(analysis);
       setState(AppState.RESULT);
@@ -291,7 +289,6 @@ const App: React.FC = () => {
                       Reveal the hidden destination of QR code before you scan it.
                     </p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                 </button>
 
                 {/* 2. Analyze Screenshot */}
@@ -308,7 +305,6 @@ const App: React.FC = () => {
                       Upload chats (WhatsApp/Line), emails, or images to detect fraud.
                     </p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                 </button>
 
                 {/* 3. Verify Link */}
@@ -325,9 +321,9 @@ const App: React.FC = () => {
                       Upload an screenshot of suspicious URL to check for phishing or malware.
                     </p>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-500 transition-colors" />
                 </button>
               </div>
+              <p className="text-[10px] text-slate-400 text-center mt-4">Submissions are logged to help detect and prevent scams.</p>
             </motion.div>
           )}
 
@@ -373,22 +369,22 @@ const App: React.FC = () => {
           {/* RESULT VIEW — Generic (Screenshot) */}
           {state === AppState.RESULT && result && activeContent && analysisSource !== 'qr' && analysisSource !== 'link' && !isScanningQr && !modalMode && (
             <motion.div key="result" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md pb-56">
-              <div className="flex justify-center mb-8">
+              <div className="flex flex-col items-center gap-6 pt-3 pb-3 mb-6">
                 <Aperture isAnalyzing={false} score={result.score} />
-              </div>
 
-              <div className="flex justify-center mb-6 w-full h-10">
-                {isDifferentLang && (
-                  <button
-                    onClick={() => setViewMode(viewMode === 'native' ? 'translated' : 'native')}
-                    className="flex items-center gap-3 px-5 py-2.5 bg-neutral-100 hover:bg-blue-50 border border-neutral-200 rounded-full transition-all group shadow-sm"
-                  >
-                    <Globe size={14} className="text-blue-600" />
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-                      Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
-                    </span>
-                  </button>
-                )}
+                <div className="flex justify-center w-full min-h-10">
+                  {isDifferentLang && (
+                    <button
+                      onClick={() => setViewMode(viewMode === 'native' ? 'translated' : 'native')}
+                      className="flex items-center gap-3 px-5 py-2.5 bg-neutral-100 hover:bg-blue-50 border border-neutral-200 rounded-full transition-all group shadow-sm"
+                    >
+                      <Globe size={14} className="text-blue-600" />
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
+                        Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               <motion.div key={viewMode} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -408,6 +404,7 @@ const App: React.FC = () => {
                     trap={activeContent.trap}
                     infrastructureClues={genericInfrastructureClues}
                     category={result.category}
+                    analysisId={result.analysisId}
                   />
                 </div>
               </motion.div>

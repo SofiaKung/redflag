@@ -196,7 +196,7 @@ const EvidenceModal: React.FC<EvidenceModalProps> = ({
 
         <div className="bg-slate-50 px-8 py-4 flex items-center justify-center gap-2 shrink-0">
           <Globe size={12} className="text-slate-400" />
-          <span className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-widest">Evidence_Protocol_V2.0</span>
+          <span className="text-[10px] font-mono text-slate-400 uppercase font-bold tracking-widest">Submissions are logged to help detect and prevent scams.</span>
         </div>
       </motion.div>
     </motion.div>

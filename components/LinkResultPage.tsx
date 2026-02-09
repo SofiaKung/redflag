@@ -180,24 +180,23 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
       exit={{ opacity: 0, scale: 0.95 }}
       className="w-full max-w-md mx-auto pb-56"
     >
-      {/* ===== APERTURE SCORE ===== */}
-      <div className="flex justify-center mb-8">
+      {/* ===== SCORE HERO ===== */}
+      <div className="flex flex-col items-center gap-6 pt-3 pb-3 mb-6">
         <Aperture isAnalyzing={false} score={result.score} />
-      </div>
 
-      {/* Language Toggle */}
-      <div className="flex justify-center mb-6 w-full h-10">
-        {isDifferentLang && (
-          <button
-            onClick={onToggleLanguage}
-            className="flex items-center gap-3 px-5 py-2.5 bg-neutral-100 hover:bg-blue-50 border border-neutral-200 rounded-full transition-all group shadow-sm"
-          >
-            <Globe size={14} className="text-blue-600" />
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
-              Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
-            </span>
-          </button>
-        )}
+        <div className="flex justify-center w-full min-h-10">
+          {isDifferentLang && (
+            <button
+              onClick={onToggleLanguage}
+              className="flex items-center gap-3 px-5 py-2.5 bg-neutral-100 hover:bg-blue-50 border border-neutral-200 rounded-full transition-all group shadow-sm"
+            >
+              <Globe size={14} className="text-blue-600" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-600">
+                Show in {viewMode === 'translated' ? result.detectedNativeLanguage : result.userSystemLanguage}
+              </span>
+            </button>
+          )}
+        </div>
       </div>
 
       <motion.div key={viewMode} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
@@ -491,6 +490,7 @@ const LinkResultPage: React.FC<LinkResultPageProps> = ({
             trap={activeContent.trap}
             infrastructureClues={infrastructureClues}
             category={result.category}
+            analysisId={result.analysisId}
           />
         </div>
       </motion.div>

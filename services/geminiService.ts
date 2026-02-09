@@ -2,6 +2,48 @@
 import { AnalysisResult, RiskLevel } from "../types";
 import { runLinkIntelligence } from "./linkIntelligence";
 
+// ---- Unified API (uses /api/analyze backend) ----
+
+const ANALYZE_ENDPOINT = '/api/analyze';
+const FEEDBACK_ENDPOINT = '/api/feedback';
+
+export const analyzeContent = async (input: {
+  url?: string;
+  text?: string;
+  imagesBase64?: string[];
+  userLanguage: string;
+  userCountryCode?: string;
+}): Promise<AnalysisResult> => {
+  const response = await fetch(ANALYZE_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(errText || 'Analysis failed');
+  }
+  return response.json();
+};
+
+export const submitFeedback = async (
+  analysisId: string,
+  feedback: 'correct' | 'incorrect'
+): Promise<boolean> => {
+  try {
+    const response = await fetch(FEEDBACK_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysisId, feedback }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+// ---- Legacy endpoints (kept for backward compat) ----
+
 const GEMINI_ENDPOINT = '/api/gemini';
 const SchemaType = {
   OBJECT: 'OBJECT',

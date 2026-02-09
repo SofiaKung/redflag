@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@google/genai": "^1.40.0",
+    "@supabase/supabase-js": "^2.95.3",
     "@yudiel/react-qr-scanner": "^2.1.0",
     "framer-motion": "^12.33.0",
     "lucide-react": "^0.563.0",
