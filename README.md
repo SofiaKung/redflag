@@ -32,7 +32,7 @@ A fraud detection app that combines real-time technical intelligence with AI ana
    `npm run dev`
 
 ## Architecture
-
+https://redflag-bay.vercel.app/#/architecture
 ### Overview
 
 ```
